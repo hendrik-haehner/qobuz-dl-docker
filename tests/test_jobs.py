@@ -1,14 +1,19 @@
 import asyncio
-import sys
 from pathlib import Path
 
 import pytest
 
 from app.jobs import Job, JobManager, JobStatus, build_command, validate
+from app.preferences import Preferences
 from app.settings import Settings
+from app.storage import StorageError
+from tests.conftest import write_fake_bin
+
+URL = "https://open.qobuz.com/album/a"
 
 
 def make_settings(tmp_path: Path, bin_path: str = "qobuz-dl") -> Settings:
+    (tmp_path / "dl").mkdir(exist_ok=True)
     return Settings(
         download_dir=tmp_path / "dl",
         config_dir=tmp_path / "cfg",
@@ -27,7 +32,7 @@ def make_settings(tmp_path: Path, bin_path: str = "qobuz-dl") -> Settings:
     ],
 )
 def test_validate_accepts(url):
-    validate(url, 27)
+    validate(url)
 
 
 @pytest.mark.parametrize(
@@ -42,47 +47,49 @@ def test_validate_accepts(url):
 )
 def test_validate_rejects_url(url):
     with pytest.raises(ValueError):
-        validate(url, 6)
+        validate(url)
 
 
-def test_validate_rejects_quality():
-    with pytest.raises(ValueError):
-        validate("https://open.qobuz.com/album/a", 8)
-
-
-def test_build_command(tmp_path):
+def test_build_command_flac(tmp_path):
     s = make_settings(tmp_path)
-    job = Job(url="https://open.qobuz.com/album/a", quality=7)
-    assert build_command(s, job) == [
-        "qobuz-dl", "dl", "https://open.qobuz.com/album/a", "-q", "7", "-d", str(s.download_dir),
+    opts = Preferences(format="flac", quality=27, target_dir="Hi-Res",
+                       folder_format="{artist}/{album}", track_format="{tracknumber} {tracktitle}")
+    cmd = build_command(s, Job(url=URL, options=opts))
+    assert cmd == [
+        "qobuz-dl", "dl", URL, "-q", "27", "-d", str((s.download_dir / "Hi-Res").resolve()),
+        "-ff", "{artist}/{album}", "-tf", "{tracknumber} {tracktitle}",
     ]
 
 
-def _fake_bin(tmp_path: Path, code: int) -> str:
-    script = tmp_path / "fake-qobuz-dl"
-    script.write_text(
-        f"#!{sys.executable}\n"
-        "import sys\n"
-        "print('\\x1b[33mDownloading', sys.argv[2])\n"
-        "print('50%\\r100%')\n"
-        f"sys.exit({code})\n"
-    )
-    script.chmod(0o755)
-    return str(script)
+def test_build_command_mp3_ignores_flac_quality(tmp_path):
+    s = make_settings(tmp_path)
+    cmd = build_command(s, Job(url=URL, options=Preferences(format="mp3", quality=27)))
+    assert cmd[cmd.index("-q") + 1] == "5"
+    assert cmd[cmd.index("-d") + 1] == str(s.download_dir.resolve())
 
 
 @pytest.mark.parametrize("code,status", [(0, JobStatus.done), (1, JobStatus.failed)])
 def test_run_job(tmp_path, code, status):
-    manager = JobManager(make_settings(tmp_path, _fake_bin(tmp_path, code)))
-    job = Job(url="https://open.qobuz.com/album/a", quality=6)
+    manager = JobManager(make_settings(tmp_path, write_fake_bin(tmp_path, code)))
+    job = Job(url=URL, options=Preferences(target_dir="neu/unterordner"))
     asyncio.run(manager.run(job))
     assert job.status == status
     assert job.return_code == code
-    assert list(job.log) == ["Downloading https://open.qobuz.com/album/a", "100%"]
+    assert list(job.log)[:2] == [f"Downloading {URL}", "100%"]
+    # Zielordner wird bei Bedarf angelegt
+    assert (tmp_path / "dl" / "neu" / "unterordner").is_dir()
 
 
 def test_missing_binary_marks_failed(tmp_path):
     manager = JobManager(make_settings(tmp_path, str(tmp_path / "missing")))
-    job = Job(url="https://open.qobuz.com/album/a", quality=6)
+    job = Job(url=URL, options=Preferences())
     asyncio.run(manager.run(job))
     assert job.status == JobStatus.failed
+
+
+def test_submit_rejects_symlink_escape(tmp_path):
+    s = make_settings(tmp_path)
+    (s.download_dir / "raus").symlink_to(tmp_path)
+    manager = JobManager(s)
+    with pytest.raises(StorageError):
+        manager.submit(URL, Preferences(target_dir="raus"))

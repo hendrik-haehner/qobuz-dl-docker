@@ -8,12 +8,13 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 
+from app.preferences import Preferences, qobuz_quality
 from app.settings import Settings
+from app.storage import resolve
 
 ALLOWED_URL = re.compile(
     r"^https://(open|play|www)\.qobuz\.com/\S+$|^https://(www\.)?last\.fm/\S+$"
 )
-VALID_QUALITIES = (5, 6, 7, 27)
 LOG_LINES = 200
 # Farbcodes von colorama/tqdm aus der Ausgabe entfernen
 ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
@@ -29,7 +30,7 @@ class JobStatus(str, Enum):
 @dataclass
 class Job:
     url: str
-    quality: int
+    options: Preferences
     id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     status: JobStatus = JobStatus.queued
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
@@ -41,7 +42,9 @@ class Job:
         return {
             "id": self.id,
             "url": self.url,
-            "quality": self.quality,
+            "format": self.options.format,
+            "quality": self.options.quality,
+            "target_dir": self.options.target_dir,
             "status": self.status.value,
             "created_at": self.created_at.isoformat(),
             "finished_at": self.finished_at.isoformat() if self.finished_at else None,
@@ -50,23 +53,26 @@ class Job:
         }
 
 
-def validate(url: str, quality: int) -> None:
+def validate(url: str) -> None:
     if not ALLOWED_URL.match(url.strip()):
         raise ValueError("Nur Qobuz- oder last.fm-URLs (https) sind erlaubt.")
-    if quality not in VALID_QUALITIES:
-        raise ValueError(f"Qualität muss eine von {VALID_QUALITIES} sein.")
 
 
 def build_command(settings: Settings, job: Job) -> list[str]:
     # Liste statt Shell-String: keine Shell-Injection möglich
+    o = job.options
     return [
         settings.qobuz_dl_bin,
         "dl",
         job.url,
         "-q",
-        str(job.quality),
+        str(qobuz_quality(o.format, o.quality)),
         "-d",
-        str(settings.download_dir),
+        str(resolve(settings.download_dir, o.target_dir)),
+        "-ff",
+        o.folder_format,
+        "-tf",
+        o.track_format,
     ]
 
 
@@ -90,10 +96,11 @@ class JobManager:
                 pass
             self._worker = None
 
-    def submit(self, url: str, quality: int) -> Job:
+    def submit(self, url: str, options: Preferences) -> Job:
         url = url.strip()
-        validate(url, quality)
-        job = Job(url=url, quality=quality)
+        validate(url)
+        resolve(self.settings.download_dir, options.target_dir)  # wirft bei Ausbruch
+        job = Job(url=url, options=options)
         self.jobs[job.id] = job
         self._queue.put_nowait(job)
         return job
@@ -112,6 +119,9 @@ class JobManager:
     async def run(self, job: Job) -> None:
         job.status = JobStatus.running
         try:
+            resolve(self.settings.download_dir, job.options.target_dir).mkdir(
+                parents=True, exist_ok=True
+            )
             proc = await asyncio.create_subprocess_exec(
                 *build_command(self.settings, job),
                 stdin=asyncio.subprocess.DEVNULL,

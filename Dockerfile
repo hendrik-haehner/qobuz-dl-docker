@@ -9,7 +9,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 RUN useradd --create-home --uid 1000 app \
     && mkdir -p /downloads /home/app/.config/qobuz-dl \
-    && chown -R app:app /downloads /home/app
+    && chown -R app:app /downloads /home/app \
+    # Andere UIDs (PUID/PGID, z. B. NAS-Benutzer) müssen den Config-Mount erreichen
+    && chmod 755 /home/app /home/app/.config
 
 WORKDIR /srv
 COPY requirements.txt .

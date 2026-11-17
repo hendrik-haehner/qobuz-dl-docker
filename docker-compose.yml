@@ -4,6 +4,8 @@ services:
     image: qobuz-dl-web:latest
     container_name: qobuz-dl-web
     restart: unless-stopped
+    # Mit diesem Benutzer schreibt der Container auf das NAS (siehe README).
+    user: "${PUID:-1000}:${PGID:-1000}"
     env_file:
       - path: .env
         required: false
@@ -11,4 +13,21 @@ services:
       - "${WEB_PORT:-8080}:8080"
     volumes:
       - ./config:/home/app/.config/qobuz-dl
-      - ./downloads:/downloads
+      # Musik-Root: Im Webinterface wählst du Unterordner davon als Speicherort.
+      - ${MUSIC_DIR:-./downloads}:/downloads
+      # Läuft Docker NICHT auf dem NAS: Zeile oben auskommentieren und
+      # stattdessen das Volume "nas-musik" unten verwenden.
+      # - nas-musik:/downloads
+
+# volumes:
+#   nas-musik:
+#     driver: local
+#     driver_opts:
+#       # NFS:
+#       type: nfs
+#       o: "addr=192.168.1.10,rw,nfsvers=4"
+#       device: ":/volume1/music"
+#       # oder SMB/CIFS:
+#       # type: cifs
+#       # o: "addr=192.168.1.10,username=musik,password=...,uid=1000,gid=1000,file_mode=0664,dir_mode=0775"
+#       # device: "//192.168.1.10/music"

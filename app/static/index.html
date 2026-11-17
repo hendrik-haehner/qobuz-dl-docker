@@ -11,21 +11,88 @@
     <h1>qobuz-dl web</h1>
     <p id="config-status" class="muted">Prüfe Konfiguration …</p>
 
-    <form id="dl-form">
-      <input id="url" type="url" required placeholder="https://open.qobuz.com/album/…">
-      <select id="quality">
-        <option value="5">MP3 320</option>
-        <option value="6">FLAC 16/44.1</option>
-        <option value="7">FLAC 24 ≤ 96 kHz</option>
-        <option value="27">FLAC 24 &gt; 96 kHz</option>
-      </select>
-      <button type="submit">Herunterladen</button>
+    <form id="dl-form" class="card" novalidate>
+      <label class="field">
+        <span>Qobuz-URL</span>
+        <input id="url" type="url" placeholder="https://open.qobuz.com/album/…">
+      </label>
+
+      <div class="row">
+        <fieldset class="field">
+          <legend>Format</legend>
+          <div class="segmented">
+            <label><input type="radio" name="format" value="flac" checked><span>FLAC</span></label>
+            <label><input type="radio" name="format" value="mp3"><span>MP3 320</span></label>
+          </div>
+        </fieldset>
+
+        <label class="field" id="quality-field">
+          <span>Qualität</span>
+          <select id="quality">
+            <option value="6">CD · 16 Bit / 44,1 kHz</option>
+            <option value="7">Hi-Res · 24 Bit bis 96 kHz</option>
+            <option value="27">Hi-Res · 24 Bit bis 192 kHz (max.)</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="field">
+        <span>Speicherort</span>
+        <div class="path-row">
+          <code id="target-display" class="path"></code>
+          <button type="button" id="browse" class="secondary">Ordner wählen</button>
+        </div>
+      </div>
+
+      <details id="naming">
+        <summary>Ordner- und Dateinamen</summary>
+        <label class="field">
+          <span>Ordner <small class="muted">(„/“ erzeugt Unterordner)</small></span>
+          <input id="folder_format" spellcheck="false">
+          <small class="muted chips" id="folder-keys"></small>
+        </label>
+        <label class="field">
+          <span>Datei</span>
+          <input id="track_format" spellcheck="false">
+          <small class="muted chips" id="track-keys"></small>
+        </label>
+        <div class="presets">
+          <span class="muted">Vorlagen:</span>
+          <button type="button" class="link" data-folder="{artist}/{album} ({year})" data-track="{tracknumber}. {tracktitle}">Interpret / Album (Jahr)</button>
+          <button type="button" class="link" data-folder="{artist} - {album} ({year}) [{bit_depth}B-{sampling_rate}kHz]" data-track="{tracknumber}. {tracktitle}">qobuz-dl-Standard</button>
+        </div>
+      </details>
+
+      <p class="preview"><span class="muted">Beispiel:</span> <code id="preview"></code></p>
+
+      <div class="actions">
+        <button type="submit">Herunterladen</button>
+        <button type="button" id="save-defaults" class="secondary">Als Standard speichern</button>
+      </div>
+      <p id="form-msg" hidden></p>
     </form>
-    <p id="form-error" class="error" hidden></p>
 
     <h2>Downloads</h2>
-    <ul id="jobs"></ul>
+    <ul id="jobs"><li class="muted empty">Noch keine Downloads.</li></ul>
   </main>
+
+  <dialog id="browser">
+    <form method="dialog" class="browser">
+      <h3>Speicherort wählen</h3>
+      <nav id="crumbs" class="crumbs"></nav>
+      <ul id="dirs" class="dirs"></ul>
+      <p id="browser-msg" class="error" hidden></p>
+      <div class="new-folder">
+        <input id="new-folder" placeholder="Neuer Ordner" spellcheck="false">
+        <button type="button" id="mkdir" class="secondary">Anlegen</button>
+      </div>
+      <div class="actions">
+        <button type="button" id="choose">Diesen Ordner nehmen</button>
+        <button value="cancel" class="secondary">Abbrechen</button>
+      </div>
+    </form>
+  </dialog>
+
   <script src="/static/app.js"></script>
 </body>
 </html>
