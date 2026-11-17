@@ -4,7 +4,10 @@ Docker-App mit Webinterface für das Terminalprogramm
 [qobuz-dl](https://github.com/vitiko98/qobuz-dl). Im Browser gibst du eine Qobuz-URL
 ein, der Container lädt sie mit `qobuz-dl dl` herunter und zeigt die Ausgabe live an.
 
-Im Webinterface einstellbar, pro Download oder als gespeicherter Standard:
+Im Webinterface meldest du dich mit deinem **Qobuz-Konto** an (E-Mail oder
+Benutzername + Passwort). Die Zugangsdaten werden direkt bei Qobuz geprüft.
+
+Außerdem einstellbar, pro Download oder als gespeicherter Standard:
 
 - **Format:** FLAC oder MP3 320
 - **Qualität** (bei FLAC): CD 16/44,1 · Hi-Res 24/96 · Hi-Res 24/192.
@@ -19,16 +22,19 @@ Im Webinterface einstellbar, pro Download oder als gespeicherter Standard:
 ## Schnellstart
 
 ```bash
-cp .env.example .env   # QOBUZ_EMAIL und QOBUZ_PASSWORD eintragen
+cp .env.example .env   # Musikordner, PUID/PGID anpassen
 docker compose up -d --build
 ```
 
-Danach ist das Webinterface unter <http://localhost:8080> erreichbar.
+Danach das Webinterface unter <http://localhost:8080> öffnen und oben unter
+„Qobuz-Konto“ anmelden. Die App holt sich die nötige App-Kennung von Qobuz, prüft
+die Anmeldung und schreibt erst dann `config/config.ini`. Gespeichert wird wie bei
+qobuz-dl selbst nur der MD5-Hash des Passworts, ausgeliefert wird er nie.
+„Abmelden“ löscht die Zugangsdaten wieder.
 
-Beim ersten Start erzeugt der Container aus `QOBUZ_EMAIL`/`QOBUZ_PASSWORD` die
-Datei `config/config.ini` (gespeichert wird nur der MD5-Hash des Passworts, wie bei
-qobuz-dl selbst). Danach kannst du die beiden Variablen aus `.env` wieder löschen.
-Eine vorhandene `config.ini` von qobuz-dl kannst du auch direkt nach `config/` kopieren.
+Alternativen: `QOBUZ_EMAIL`/`QOBUZ_PASSWORD` in `.env` (wird beim Start einmalig
+verwendet, wenn noch keine Anmeldung existiert), oder eine vorhandene `config.ini`
+von qobuz-dl nach `config/` kopieren.
 
 | Pfad im Host | Pfad im Container | Inhalt |
 |---|---|---|
@@ -63,7 +69,7 @@ etwa `/downloads/Hi-Res` → auf dem NAS `/volume1/music/Hi-Res`.
 
 | Variable | Standard | Zweck |
 |---|---|---|
-| `QOBUZ_EMAIL`, `QOBUZ_PASSWORD` | – | nur für die Ersteinrichtung |
+| `QOBUZ_EMAIL`, `QOBUZ_PASSWORD` | – | optional, statt Anmeldung im Webinterface |
 | `QOBUZ_DEFAULT_QUALITY` | `6` | Startwert, bis im Webinterface ein Standard gespeichert wird: `5` MP3 320, `6` FLAC 16/44.1, `7` FLAC 24/96, `27` FLAC 24/192 |
 | `MUSIC_DIR` | `./downloads` | Musikordner auf dem Host |
 | `PUID`, `PGID` | `1000` | Benutzer-/Gruppen-ID, mit der der Container schreibt |
@@ -77,7 +83,7 @@ app/
   jobs.py          Warteschlange, startet qobuz-dl als Subprozess (ein Job nach dem anderen)
   preferences.py   Format, Qualität, Speicherort, Namensmuster (+ Prüfung der Platzhalter)
   storage.py       Ordner im Musik-Root auflisten/anlegen, ohne aus ihm auszubrechen
-  qobuz_config.py  erzeugt config.ini ohne interaktive Eingabe
+  qobuz_config.py  Qobuz-Anmeldung: prüft Zugangsdaten, schreibt config.ini
   settings.py      Einstellungen aus Umgebungsvariablen
   static/          HTML, CSS, JS (ohne Build-Schritt)
 docker/entrypoint.sh
@@ -89,7 +95,10 @@ tests/
 | Methode | Pfad | |
 |---|---|---|
 | `GET` | `/api/health` | Healthcheck |
-| `GET` | `/api/status` | ist qobuz-dl konfiguriert? Musik-Root, erlaubte Platzhalter |
+| `GET` | `/api/status` | angemeldet? Musik-Root, erlaubte Platzhalter |
+| `GET` | `/api/account` | `{"configured": true, "email": "..."}` |
+| `PUT` | `/api/account` | `{"email": "...", "password": "..."}` prüft bei Qobuz und speichert |
+| `DELETE` | `/api/account` | Abmelden: löscht `config.ini` |
 | `GET`/`PUT` | `/api/settings` | gespeicherte Standards: `format`, `quality`, `target_dir`, `folder_format`, `track_format` |
 | `GET` | `/api/folders?path=Rock` | Unterordner im Musik-Root |
 | `POST` | `/api/folders` | `{"parent": "Rock", "name": "Hi-Res"}` legt einen Ordner an |
@@ -107,8 +116,10 @@ Es werden nur `https://`-URLs von `open.`, `play.` und `www.qobuz.com` sowie von
 last.fm angenommen. qobuz-dl wird ohne Shell aufgerufen. Speicherorte können den
 Musik-Root nicht verlassen, auch nicht über `..` oder Symlinks.
 
-> Das Webinterface hat **keine Anmeldung**. Betreibe es nur im eigenen Netz oder
-> hinter einem Reverse-Proxy mit Authentifizierung.
+> Das Webinterface selbst hat **keinen Zugangsschutz**: Jeder, der es erreicht, kann
+> herunterladen, die hinterlegte E-Mail sehen und das Qobuz-Konto ändern. Außerdem
+> geht das Passwort beim Anmelden per HTTP unverschlüsselt durchs Netz. Betreibe es
+> nur im eigenen Netz, oder hinter einem Reverse-Proxy mit HTTPS und Anmeldung.
 
 ## Entwicklung
 

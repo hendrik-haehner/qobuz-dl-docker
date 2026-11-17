@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
 
-from app import preferences, storage
+from app import preferences, qobuz_config, storage
 from app.jobs import JobManager
 from app.preferences import FOLDER_KEYS, TRACK_KEYS, Preferences
 from app.settings import get_settings
@@ -25,6 +25,11 @@ class DownloadRequest(BaseModel):
     target_dir: str | None = None
     folder_format: str | None = None
     track_format: str | None = None
+
+
+class Credentials(BaseModel):
+    email: str
+    password: str
 
 
 class NewFolder(BaseModel):
@@ -67,13 +72,37 @@ def health():
 def status():
     s = get_settings()
     return {
-        "configured": s.config_file.is_file(),
+        **qobuz_config.account(s),
         "download_dir": str(s.download_dir),
         "placeholders": {
             "folder": sorted(FOLDER_KEYS),
             "track": sorted(TRACK_KEYS),
         },
     }
+
+
+@app.get("/api/account")
+def get_account():
+    return qobuz_config.account(get_settings())
+
+
+@app.put("/api/account")
+def put_account(creds: Credentials):
+    """Zugangsdaten bei Qobuz prüfen und speichern (Dauer: einige Sekunden)."""
+    try:
+        return qobuz_config.login(get_settings(), creds.email, creds.password)
+    except qobuz_config.LoginError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except OSError as exc:
+        raise HTTPException(
+            500, f"Zugangsdaten konnten nicht gespeichert werden ({exc.strerror}). "
+            "Hat der Container Schreibrechte auf den Config-Ordner (PUID/PGID)?"
+        ) from exc
+
+
+@app.delete("/api/account", status_code=204)
+def delete_account():
+    qobuz_config.logout(get_settings())
 
 
 @app.get("/api/settings")
@@ -134,9 +163,7 @@ def create_download(req: DownloadRequest):
     settings = get_settings()
     if not settings.config_file.is_file():
         # Sonst bleibt qobuz-dl in seiner interaktiven Ersteinrichtung hängen
-        raise HTTPException(
-            409, "qobuz-dl ist nicht konfiguriert: QOBUZ_EMAIL und QOBUZ_PASSWORD setzen."
-        )
+        raise HTTPException(409, "Bitte zuerst oben mit deinem Qobuz-Konto anmelden.")
     defaults = preferences.load(settings).model_dump()
     overrides = req.model_dump(exclude={"url"}, exclude_none=True)
     try:

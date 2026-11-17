@@ -72,15 +72,69 @@ async function loadStatus() {
   musicRoot = s.download_dir.replace(/\/$/, "");
   $("folder-keys").textContent = s.placeholders.folder.map((k) => `{${k}}`).join(" ");
   $("track-keys").textContent = s.placeholders.track.map((k) => `{${k}}`).join(" ");
-  const el = $("config-status");
-  if (s.configured) {
-    el.textContent = "Bereit.";
-    el.className = "muted";
-  } else {
-    el.textContent = "Keine qobuz-dl-Konfiguration gefunden. QOBUZ_EMAIL und QOBUZ_PASSWORD in .env setzen und Container neu starten.";
-    el.className = "error";
-  }
+  renderAccount(s);
 }
+
+// ---------- Qobuz-Konto ----------
+let account = { configured: false, email: null };
+
+function accountMsg(text, ok) {
+  const el = $("account-msg");
+  el.textContent = text || "";
+  el.className = ok ? "ok" : "error";
+  el.hidden = !text;
+}
+
+function renderAccount(a, membership = "") {
+  account = a;
+  $("account-info").hidden = !a.configured;
+  $("login-form").hidden = a.configured;
+  $("login-cancel").hidden = true;
+  $("account-email").textContent = a.email || "unbekannt";
+  $("account-membership").textContent = membership ? `(${membership})` : "";
+  if (!a.configured) $("login-email").value = a.email || "";
+}
+
+$("account-change").onclick = () => {
+  $("login-email").value = account.email || "";
+  $("login-form").hidden = false;
+  $("login-cancel").hidden = false;
+  $("account-info").hidden = true;
+  accountMsg("");
+  $("login-password").focus();
+};
+$("login-cancel").onclick = () => {
+  $("login-password").value = "";
+  accountMsg("");
+  renderAccount(account);
+};
+$("logout").onclick = async () => {
+  if (!confirm("Qobuz-Zugangsdaten aus dem Container löschen?")) return;
+  await api("/api/account", { method: "DELETE" });
+  renderAccount({ configured: false, email: null });
+  accountMsg("Abgemeldet.", true);
+};
+$("login-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const btn = $("login-submit");
+  btn.disabled = true;
+  btn.textContent = "Prüfe bei Qobuz …";
+  accountMsg("");
+  try {
+    const res = await api("/api/account", {
+      method: "PUT",
+      body: { email: $("login-email").value.trim(), password: $("login-password").value },
+    });
+    renderAccount(res, res.membership);
+    accountMsg("Angemeldet.", true);
+  } catch (err) {
+    accountMsg(err.message, false);
+  } finally {
+    $("login-password").value = "";
+    btn.disabled = false;
+    btn.textContent = "Anmelden";
+  }
+});
 
 // ---------- Ordnerauswahl ----------
 let browsePath = "";

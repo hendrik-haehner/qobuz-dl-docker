@@ -83,3 +83,30 @@ def test_settings_save_error_is_reported(env, monkeypatch):
         res = client.put("/api/settings", json={"format": "mp3"})
         assert res.status_code == 500
         assert "Schreibrechte" in res.json()["detail"]
+
+
+def test_account_flow(env, monkeypatch):
+    monkeypatch.setattr("app.qobuz_config._fetch_tokens", lambda: ("123456789", ["s"]))
+
+    def verify(email, pwd_md5, app_id, secrets):
+        from qobuz_dl.exceptions import AuthenticationError
+        if pwd_md5 != __import__("hashlib").md5(b"richtig").hexdigest():
+            raise AuthenticationError()
+        return "Studio"
+
+    monkeypatch.setattr("app.qobuz_config._verify", verify)
+    with TestClient(app) as client:
+        assert client.get("/api/account").json() == {"configured": False, "email": None}
+        res = client.put("/api/account", json={"email": "a@b.c", "password": "falsch"})
+        assert res.status_code == 422 and "falsch" in res.json()["detail"]
+        res = client.put("/api/account", json={"email": "a@b.c", "password": "richtig"})
+        assert res.json() == {"configured": True, "email": "a@b.c", "membership": "Studio"}
+        status = client.get("/api/status").json()
+        assert (status["configured"], status["email"]) == (True, "a@b.c")
+        # Passwort/Hash wird nirgends ausgeliefert
+        for path in ("/api/account", "/api/status"):
+            body = client.get(path).text
+            assert "richtig" not in body and "password" not in body
+        assert client.delete("/api/account").status_code == 204
+        assert client.get("/api/account").json()["configured"] is False
+        assert client.post("/api/downloads", json={"url": URL}).status_code == 409

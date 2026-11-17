@@ -77,6 +77,16 @@ details#naming .field { margin-bottom: 10px; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; }
 #form-msg { margin: 0; }
 
+#account { margin-top: 12px; }
+#account h2 { margin: 0; font-size: 18px; }
+.account-head { display: grid; gap: 8px; }
+.account-info { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+.account-info strong { overflow-wrap: anywhere; }
+.account-info .actions { margin-left: auto; }
+.login { display: grid; gap: 12px; }
+.login p, #account-msg { margin: 0; }
+button:disabled { opacity: 0.6; cursor: progress; }
+
 dialog {
   width: min(520px, calc(100vw - 32px));
   border: 1px solid var(--border);

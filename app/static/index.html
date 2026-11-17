@@ -9,7 +9,36 @@
 <body>
   <main>
     <h1>qobuz-dl web</h1>
-    <p id="config-status" class="muted">Prüfe Konfiguration …</p>
+    <section class="card" id="account" aria-labelledby="account-title">
+      <div class="account-head">
+        <h2 id="account-title">Qobuz-Konto</h2>
+        <div id="account-info" class="account-info" hidden>
+          <span>Angemeldet als <strong id="account-email"></strong></span>
+          <span id="account-membership" class="muted"></span>
+          <div class="actions">
+            <button type="button" id="account-change" class="secondary">Ändern</button>
+            <button type="button" id="logout" class="secondary">Abmelden</button>
+          </div>
+        </div>
+      </div>
+      <form id="login-form" class="login" hidden>
+        <label class="field">
+          <span>E-Mail oder Benutzername</span>
+          <input id="login-email" name="username" autocomplete="username" required spellcheck="false">
+        </label>
+        <label class="field">
+          <span>Passwort</span>
+          <input id="login-password" name="password" type="password" autocomplete="current-password" required>
+        </label>
+        <p class="muted small">Die Anmeldung wird direkt bei Qobuz geprüft. Gespeichert wird,
+          wie bei qobuz-dl, nur ein Hash des Passworts.</p>
+        <div class="actions">
+          <button type="submit" id="login-submit">Anmelden</button>
+          <button type="button" id="login-cancel" class="secondary" hidden>Abbrechen</button>
+        </div>
+      </form>
+      <p id="account-msg" hidden></p>
+    </section>
 
     <form id="dl-form" class="card" novalidate>
       <label class="field">
