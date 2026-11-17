@@ -1,0 +1,39 @@
+services:
+  qobuz-dl-web:
+    build: .
+    image: qobuz-dl-web:latest
+    container_name: qobuz-dl-web
+    restart: unless-stopped
+    # Mit diesem Benutzer schreibt der Container auf das NAS (siehe README).
+    user: "${PUID:-1000}:${PGID:-1000}"
+    environment:
+      # Werte kommen aus der Datei .env im selben Ordner
+      WEB_PASSWORD: ${WEB_PASSWORD:-}
+      QOBUZ_DEFAULT_QUALITY: ${QOBUZ_DEFAULT_QUALITY:-6}
+      QOBUZ_EMAIL: ${QOBUZ_EMAIL:-}
+      QOBUZ_PASSWORD: ${QOBUZ_PASSWORD:-}
+    ports:
+      # Nur über einen Reverse-Proxy mit HTTPS erreichbar machen: WEB_BIND=127.0.0.1
+      - "${WEB_BIND:-0.0.0.0}:${WEB_PORT:-8080}:8080"
+    volumes:
+      - ./config:/home/app/.config/qobuz-dl
+      # NAS-Freigaben: jede Freigabe als eigener Ordner unter /shares.
+      # Im Webinterface wählst du dann Freigabe und Unterordner.
+      # Synology-Beispiel (links: Pfad auf dem NAS, rechts: Name im Webinterface):
+      - /volume1/music:/shares/music
+      # - /volume1/Downloads:/shares/Downloads
+      # Läuft Docker NICHT auf dem NAS: Freigabe per NFS/SMB-Volume (unten) einbinden
+      # - nas-musik:/shares/music
+
+# volumes:
+#   nas-musik:
+#     driver: local
+#     driver_opts:
+#       # NFS:
+#       type: nfs
+#       o: "addr=192.168.1.10,rw,nfsvers=4"
+#       device: ":/volume1/music"
+#       # oder SMB/CIFS:
+#       # type: cifs
+#       # o: "addr=192.168.1.10,username=musik,password=...,uid=1000,gid=1000,file_mode=0664,dir_mode=0775"
+#       # device: "//192.168.1.10/music"

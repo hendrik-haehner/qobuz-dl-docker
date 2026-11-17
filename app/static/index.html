@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>qobuz-dl web</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <main>
+    <header class="top">
+      <h1>qobuz-dl web</h1>
+      <button type="button" id="web-logout" class="secondary" hidden>Abmelden</button>
+    </header>
+    <p id="auth-warning" class="warning" hidden>Kein Passwort gesetzt: Jeder in deinem Netz kann diese Seite
+      benutzen und dein Qobuz-Konto ändern. Setze <code>WEB_PASSWORD</code> in <code>.env</code>.</p>
+    <section class="card" id="account" aria-labelledby="account-title">
+      <div class="account-head">
+        <h2 id="account-title">Qobuz-Konto</h2>
+        <div id="account-info" class="account-info" hidden>
+          <span>Angemeldet als <strong id="account-email"></strong></span>
+          <span id="account-membership" class="muted"></span>
+          <div class="actions">
+            <button type="button" id="account-change" class="secondary">Ändern</button>
+            <button type="button" id="logout" class="secondary">Konto entfernen</button>
+          </div>
+        </div>
+      </div>
+      <form id="login-form" class="login" hidden>
+        <label class="field">
+          <span>E-Mail oder Benutzername</span>
+          <input id="login-email" name="username" autocomplete="username" required spellcheck="false">
+        </label>
+        <label class="field">
+          <span>Passwort</span>
+          <input id="login-password" name="password" type="password" autocomplete="current-password" required>
+        </label>
+        <p class="muted small">Die Anmeldung wird direkt bei Qobuz geprüft. Gespeichert wird,
+          wie bei qobuz-dl, nur ein Hash des Passworts.</p>
+        <div class="actions">
+          <button type="submit" id="login-submit">Anmelden</button>
+          <button type="button" id="login-cancel" class="secondary" hidden>Abbrechen</button>
+        </div>
+      </form>
+      <p id="account-msg" hidden></p>
+    </section>
+
+    <form id="dl-form" class="card" novalidate>
+      <label class="field">
+        <span>Qobuz-URL</span>
+        <input id="url" type="url" placeholder="https://open.qobuz.com/album/…">
+      </label>
+
+      <div class="row">
+        <fieldset class="field">
+          <legend>Format</legend>
+          <div class="segmented">
+            <label><input type="radio" name="format" value="flac" checked><span>FLAC</span></label>
+            <label><input type="radio" name="format" value="mp3"><span>MP3 320</span></label>
+          </div>
+        </fieldset>
+
+        <label class="field" id="quality-field">
+          <span>Qualität</span>
+          <select id="quality">
+            <option value="6">CD · 16 Bit / 44,1 kHz</option>
+            <option value="7">Hi-Res · 24 Bit bis 96 kHz</option>
+            <option value="27">Hi-Res · 24 Bit bis 192 kHz (max.)</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="field">
+        <span>Speicherort</span>
+        <div class="path-row">
+          <code id="target-display" class="path"></code>
+          <button type="button" id="browse" class="secondary">Ordner wählen</button>
+        </div>
+      </div>
+
+      <details id="naming">
+        <summary>Ordner- und Dateinamen</summary>
+        <label class="field">
+          <span>Ordner <small class="muted">(„/“ erzeugt Unterordner)</small></span>
+          <input id="folder_format" spellcheck="false">
+          <small class="muted chips" id="folder-keys"></small>
+        </label>
+        <label class="field">
+          <span>Datei</span>
+          <input id="track_format" spellcheck="false">
+          <small class="muted chips" id="track-keys"></small>
+        </label>
+        <div class="presets">
+          <span class="muted">Vorlagen:</span>
+          <button type="button" class="link" data-folder="{artist}/{album} ({year})" data-track="{tracknumber}. {tracktitle}">Interpret / Album (Jahr)</button>
+          <button type="button" class="link" data-folder="{artist} - {album} ({year}) [{bit_depth}B-{sampling_rate}kHz]" data-track="{tracknumber}. {tracktitle}">qobuz-dl-Standard</button>
+        </div>
+      </details>
+
+      <p class="preview"><span class="muted">Beispiel:</span> <code id="preview"></code></p>
+
+      <div class="actions">
+        <button type="submit">Herunterladen</button>
+        <button type="button" id="save-defaults" class="secondary">Als Standard speichern</button>
+      </div>
+      <p id="form-msg" hidden></p>
+    </form>
+
+    <h2>Downloads</h2>
+    <ul id="jobs"><li class="muted empty">Noch keine Downloads.</li></ul>
+  </main>
+
+  <dialog id="browser">
+    <form method="dialog" class="browser">
+      <h3>Speicherort wählen</h3>
+      <nav id="crumbs" class="crumbs"></nav>
+      <p id="browser-hint" class="muted small"></p>
+      <ul id="dirs" class="dirs"></ul>
+      <p id="browser-msg" class="error" hidden></p>
+      <div class="new-folder" id="new-folder-row">
+        <input id="new-folder" placeholder="Neuer Ordner" spellcheck="false">
+        <button type="button" id="mkdir" class="secondary">Anlegen</button>
+      </div>
+      <div class="actions">
+        <button type="button" id="choose">Diesen Ordner nehmen</button>
+        <button value="cancel" class="secondary">Abbrechen</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
