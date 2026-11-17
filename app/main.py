@@ -26,6 +26,8 @@ class DownloadRequest(BaseModel):
     target_dir: str | None = None
     folder_format: str | None = None
     track_format: str | None = None
+    # Schon einmal geladene Alben trotzdem holen (Datenbank von qobuz-dl ignorieren)
+    redownload: bool = False
 
 
 class Credentials(BaseModel):
@@ -222,12 +224,12 @@ def create_download(req: DownloadRequest):
         # Sonst bleibt qobuz-dl in seiner interaktiven Ersteinrichtung hängen
         raise HTTPException(409, "Bitte zuerst oben mit deinem Qobuz-Konto anmelden.")
     defaults = preferences.load(settings).model_dump()
-    overrides = req.model_dump(exclude={"url"}, exclude_none=True)
+    overrides = req.model_dump(exclude={"url", "redownload"}, exclude_none=True)
     try:
         options = Preferences.model_validate(defaults | overrides)
         if not options.target_dir:
             options.target_dir = storage.default_target(settings.shares_dir)
-        job = app.state.jobs.submit(req.url, options)
+        job = app.state.jobs.submit(req.url, options, redownload=req.redownload)
     except (ValidationError, ValueError) as exc:
         raise _bad_request(exc) from exc
     return job.to_dict()

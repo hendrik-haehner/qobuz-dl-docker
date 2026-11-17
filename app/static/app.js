@@ -273,8 +273,12 @@ $("save-defaults").onclick = async () => {
 $("dl-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   try {
-    await api("/api/downloads", { method: "POST", body: { url: $("url").value.trim(), ...currentOptions() } });
+    await api("/api/downloads", {
+      method: "POST",
+      body: { url: $("url").value.trim(), ...currentOptions(), redownload: $("redownload").checked },
+    });
     $("url").value = "";
+    $("redownload").checked = false;  // gilt nur für diesen einen Download
     $("form-msg").hidden = true;
     loadJobs();
   } catch (err) {
@@ -283,24 +287,52 @@ $("dl-form").addEventListener("submit", async (e) => {
 });
 
 // ---------- Jobliste ----------
+const STATUS_LABEL = {
+  queued: "wartet", running: "läuft", done: "fertig", skipped: "übersprungen", failed: "Fehler",
+};
+
+function summaryText(job) {
+  const s = job.summary;
+  if (job.status === "queued") return "";
+  if (s.releases_in_db && !s.new) {
+    return "Schon einmal geladen, darum übersprungen. Mit „Erneut herunterladen“ noch einmal holen.";
+  }
+  const parts = [];
+  if (s.new) parts.push(`${s.new} neu`);
+  if (s.existing) parts.push(`${s.existing} schon vorhanden`);
+  if (s.unavailable) parts.push(`${s.unavailable} nicht verfügbar`);
+  if (s.releases_in_db) parts.push(`${s.releases_in_db} Album/Alben schon geladen`);
+  if (!parts.length) return "";
+  const text = parts.join(" · ");
+  return job.status === "skipped" ? `${text}. Nichts Neues heruntergeladen.` : text;
+}
+
 function renderJob(job) {
   const li = document.createElement("li");
   li.className = `job ${job.status}`;
   li.dataset.id = job.id;
   const head = document.createElement("div");
   head.className = "job-head";
-  const badge = Object.assign(document.createElement("span"), { className: "badge", textContent: job.status });
+  const badge = Object.assign(document.createElement("span"), {
+    className: "badge", textContent: STATUS_LABEL[job.status] || job.status,
+  });
   const url = Object.assign(document.createElement("span"), { className: "url", textContent: job.url });
   head.append(badge, url);
   const meta = document.createElement("div");
   meta.className = "muted small";
   const fmt = job.format === "mp3" ? "MP3 320" : `FLAC ${QUALITY_LABEL[job.quality]}`;
-  meta.textContent = `${fmt} → ${pretty(job.target_dir)}`;
+  meta.textContent = `${fmt} → ${pretty(job.target_dir)}${job.redownload ? " · erneut" : ""}`;
+  const result = Object.assign(document.createElement("div"), { className: "small job-summary", textContent: summaryText(job) });
+  result.hidden = !result.textContent;
   const details = document.createElement("details");
-  const summary = Object.assign(document.createElement("summary"), { textContent: job.log.at(-1) || "Noch keine Ausgabe" });
+  // Während des Downloads die aktuelle Zeile zeigen, danach nur „Protokoll“
+  const active = job.status === "running" || job.status === "queued";
+  const summary = Object.assign(document.createElement("summary"), {
+    textContent: active ? (job.log.at(-1) || "Noch keine Ausgabe") : "Protokoll anzeigen",
+  });
   const pre = Object.assign(document.createElement("pre"), { textContent: job.log.join("\n") });
   details.append(summary, pre);
-  li.append(head, meta, details);
+  li.append(head, meta, result, details);
   return li;
 }
 

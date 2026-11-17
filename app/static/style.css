@@ -140,5 +140,11 @@ ul { list-style: none; padding: 0; }
 .done .badge { color: var(--ok); border-color: var(--ok); }
 .failed .badge { color: var(--bad); border-color: var(--bad); }
 .running .badge { color: var(--accent); border-color: var(--accent); }
+.skipped .badge { color: var(--warn); border-color: var(--warn); }
+.skipped .job-summary { color: var(--warn); }
+.job-summary { margin-top: 2px; }
+.check { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+.check input { width: auto; margin-top: 4px; flex: none; }
+.check small { display: block; margin-top: 2px; }
 summary { color: var(--muted); cursor: pointer; overflow-wrap: anywhere; }
 pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; max-height: 300px; overflow: auto; }

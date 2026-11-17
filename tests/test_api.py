@@ -128,3 +128,13 @@ def test_download_without_target_uses_single_share(configured, monkeypatch):
         assert res.status_code == 422 and "Freigabe wählen" in res.json()["detail"]
         (configured["music"] / "music").mkdir()
         assert client.post("/api/downloads", json={"url": URL}).json()["target_dir"] == "music"
+
+
+def test_redownload_only_for_this_job(configured, monkeypatch):
+    monkeypatch.setenv("QOBUZ_DL_BIN", write_fake_bin(configured["home"].parent))
+    (configured["music"] / "music").mkdir()
+    with TestClient(app) as client:
+        job = client.post("/api/downloads", json={"url": URL, "redownload": True}).json()
+        assert job["redownload"] is True and job["status"] in ("queued", "running")
+        assert "redownload" not in client.get("/api/settings").json()
+        assert client.post("/api/downloads", json={"url": URL}).json()["redownload"] is False
