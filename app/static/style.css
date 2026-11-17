@@ -33,9 +33,16 @@ body {
   font: 16px/1.5 system-ui, sans-serif;
 }
 main { max-width: 760px; margin: 0 auto; padding: 24px 16px; }
+/* Als App auf dem Home-Bildschirm (viewport-fit=cover): Notch und Home-Indikator freihalten */
+main {
+  padding-top: max(24px, env(safe-area-inset-top));
+  padding-bottom: max(24px, env(safe-area-inset-bottom));
+  padding-left: max(16px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
+}
 h1 { margin: 0 0 4px; }
 .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-main.narrow { max-width: 420px; padding-top: 12vh; }
+main.narrow { max-width: 420px; padding-top: max(12vh, env(safe-area-inset-top)); }
 .warning {
   border: 1px solid var(--warn);
   background: var(--warn-bg);

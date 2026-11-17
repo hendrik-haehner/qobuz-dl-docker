@@ -57,22 +57,34 @@ Alternativ das Image öffentlich machen (GitHub → Packages → `qobuz-dl-docke
 Package settings → Change visibility → Public). Dann entfällt dieser Schritt. Das Image
 enthält keine Zugangsdaten, nur den Programmcode.
 
-**3. Starten und aktualisieren mit einem Klick**
+**3. Starten und aktualisieren**
 
-Aufgabenplaner → Erstellen → Geplante Aufgabe → Benutzerdefiniertes Skript.
-Name `qobuz-dl-web aktualisieren`, Benutzer `root`, Skript:
+Das Skript [`nas/update.sh`](nas/update.sh) lädt die neueste Version, startet den
+Container und wartet, bis er gesund ist. Jeder Schritt landet mit Uhrzeit im Terminal
+und in `update.log`: welche Version lief, ob es eine neue gab, und bei einem Fehler
+den Grund und die letzten Zeilen aus dem Container. Überbleibsel abgebrochener Updates
+(z. B. `cacc0a60dad3_qobuz-dl-web`) räumt es weg.
+
+Einmalig `update.sh` neben `docker-compose.yml` ablegen, per SSH:
 
 ```bash
-export PATH=/usr/local/bin:/usr/bin:/bin:$PATH
-cd /volume1/docker/qobuz-dl-web || exit 1
-if docker compose version >/dev/null 2>&1; then DC="docker compose"; else DC="docker-compose"; fi
-$DC pull && $DC up -d && docker image prune -f
+cd /volume1/docker/qobuz-dl-web
+sudo curl -fsSL -H "Authorization: Bearer DEIN_TOKEN" -H "Accept: application/vnd.github.raw" \
+  -o update.sh https://api.github.com/repos/hendrik-haehner/qobuz-dl-docker/contents/nas/update.sh
 ```
 
-- **Ausführen** startet den Container beim ersten Mal und holt später die neueste Version.
-- Mit einem Zeitplan (z. B. wöchentlich nachts) aktualisiert er sich automatisch.
-- Ob es geklappt hat: Aufgabe markieren → Aktion → **Ergebnis anzeigen**. Der Container
-  erscheint im Container Manager unter **Container**.
+(`DEIN_TOKEN`: ein Token mit Leserecht auf das Repository; oder den Inhalt von GitHub
+in eine neue Datei `update.sh` kopieren.)
+
+Dann aktualisieren:
+
+- **per SSH:** `sudo bash /volume1/docker/qobuz-dl-web/update.sh`
+- **per Aufgabenplaner:** Aufgabe `qobuz-dl-web aktualisieren`, Benutzer `root`, Skript
+  `bash /volume1/docker/qobuz-dl-web/update.sh`. Mit einem Zeitplan (z. B. wöchentlich
+  nachts) aktualisiert er sich automatisch. Unter „Aufgabeneinstellungen“ →
+  „Benachrichtigungsdetails per E-Mail senden“ → „Nur wenn das Skript abnormal beendet
+  wird“ bekommst du bei einem Fehler eine Mail. Das Protokoll steht in
+  `docker/qobuz-dl-web/update.log`.
 
 Danach `http://<IP-des-NAS>:8080` öffnen (bzw. dein `WEB_PORT`), mit `WEB_PASSWORD`
 anmelden und unter „Qobuz-Konto“ den Qobuz-Token eintragen (siehe „Qobuz-Anmeldung“).
@@ -155,9 +167,23 @@ Es wird nie etwas überschrieben:
 - In der Download-Liste steht dann **„übersprungen“** mit dem Grund, und bei Erfolg,
   wie viele Titel neu und wie viele schon vorhanden waren.
 
+Ein `/` in Interpret, Album oder Titel (z. B. „AC/DC“) wird in Ordner- und Dateinamen
+durch `-` ersetzt, damit keine zusätzlichen Unterordner entstehen. Die Tags in den
+Dateien behalten den Originalnamen.
+
 Für eine zweite Qualität desselben Albums sollte das Ordnermuster `{bit_depth}` und
 `{sampling_rate}` enthalten (wie der Standard), sonst landen beide im selben Ordner
 und die Titel gelten als schon vorhanden.
+
+## Als App auf dem iPhone
+
+Safari → Seite öffnen → Teilen-Symbol → **„Zum Home-Bildschirm“**. Die App startet dann
+im Vollbild ohne Safari-Leisten, mit eigenem Icon. Als App hat sie ihren eigenen
+Cookie-Speicher, darum fragt sie einmal nach `WEB_PASSWORD`; danach bleibt die
+Anmeldung 30 Tage bestehen.
+
+Von unterwegs funktioniert sie nur, wenn das NAS von dort erreichbar ist, am besten über
+ein VPN (z. B. Tailscale oder den VPN Server von DSM).
 
 ## Zugangsschutz und HTTPS
 
