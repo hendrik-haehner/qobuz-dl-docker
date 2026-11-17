@@ -57,7 +57,12 @@ app = FastAPI(title="qobuz-dl web", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 # Ohne Anmeldung erreichbar (Healthcheck, Login-Seite und deren Dateien)
-PUBLIC = {"/login", "/api/login", "/api/health", "/static/style.css", "/static/login.js"}
+PUBLIC = {
+    "/login", "/api/login", "/api/health", "/static/style.css", "/static/login.js",
+    # Für „Zum Home-Bildschirm“: iOS lädt Manifest und Icons ohne Anmeldung
+    "/manifest.webmanifest", "/apple-touch-icon.png", "/apple-touch-icon-precomposed.png",
+    "/static/icon-192.png", "/static/icon-512.png", "/static/apple-touch-icon.png",
+}
 
 
 def _logged_in(request: Request) -> bool:
@@ -80,6 +85,18 @@ def _bad_request(exc: Exception) -> HTTPException:
     else:
         msg = str(exc)
     return HTTPException(422, msg)
+
+
+@app.get("/manifest.webmanifest", include_in_schema=False)
+def manifest():
+    return FileResponse(STATIC / "manifest.webmanifest", media_type="application/manifest+json")
+
+
+# iOS fragt ohne <link> auch direkt unter diesen Pfaden nach dem Icon
+@app.get("/apple-touch-icon.png", include_in_schema=False)
+@app.get("/apple-touch-icon-precomposed.png", include_in_schema=False)
+def apple_touch_icon():
+    return FileResponse(STATIC / "apple-touch-icon.png", media_type="image/png")
 
 
 @app.get("/", include_in_schema=False)

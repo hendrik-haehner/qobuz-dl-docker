@@ -11,7 +11,7 @@ import sys
 
 from qobuz_dl import cli
 
-from app import token_auth
+from app import qdl_patches, token_auth
 
 
 def auth_method(config_file: str) -> str:
@@ -32,6 +32,7 @@ def save_token(config_file: str, token: str) -> None:
 
 
 def main() -> None:
+    qdl_patches.install_name_fix()  # „AC/DC“ nicht als zwei Ordner anlegen
     if os.path.isfile(cli.CONFIG_FILE) and auth_method(cli.CONFIG_FILE) == "token":
         token_auth.install()
         token_auth.on_token_refreshed = lambda t: save_token(cli.CONFIG_FILE, t)

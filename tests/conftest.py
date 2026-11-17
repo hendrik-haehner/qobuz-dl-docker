@@ -25,6 +25,22 @@ def configured(env):
 
 
 @pytest.fixture(autouse=True)
+def _restore_qobuz_dl():
+    """Der Runner patcht qobuz-dl global; nach jedem Test den Originalzustand herstellen."""
+    from qobuz_dl import qopy
+    from qobuz_dl.downloader import Download
+
+    from app import qdl_patches
+
+    helpers = {n: Download.__dict__[n] for n in qdl_patches.NAME_HELPERS}
+    auth = qopy.Client.auth
+    yield
+    for name, value in helpers.items():
+        setattr(Download, name, value)
+    qopy.Client.auth = auth
+
+
+@pytest.fixture(autouse=True)
 def _defaults(monkeypatch):
     monkeypatch.setenv("ALLOW_UNMOUNTED_SHARES", "1")
     monkeypatch.delenv("WEB_PASSWORD", raising=False)

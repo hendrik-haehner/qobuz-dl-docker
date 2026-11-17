@@ -167,9 +167,23 @@ Es wird nie etwas überschrieben:
 - In der Download-Liste steht dann **„übersprungen“** mit dem Grund, und bei Erfolg,
   wie viele Titel neu und wie viele schon vorhanden waren.
 
+Ein `/` in Interpret, Album oder Titel (z. B. „AC/DC“) wird in Ordner- und Dateinamen
+durch `-` ersetzt, damit keine zusätzlichen Unterordner entstehen. Die Tags in den
+Dateien behalten den Originalnamen.
+
 Für eine zweite Qualität desselben Albums sollte das Ordnermuster `{bit_depth}` und
 `{sampling_rate}` enthalten (wie der Standard), sonst landen beide im selben Ordner
 und die Titel gelten als schon vorhanden.
+
+## Als App auf dem iPhone
+
+Safari → Seite öffnen → Teilen-Symbol → **„Zum Home-Bildschirm“**. Die App startet dann
+im Vollbild ohne Safari-Leisten, mit eigenem Icon. Als App hat sie ihren eigenen
+Cookie-Speicher, darum fragt sie einmal nach `WEB_PASSWORD`; danach bleibt die
+Anmeldung 30 Tage bestehen.
+
+Von unterwegs funktioniert sie nur, wenn das NAS von dort erreichbar ist, am besten über
+ein VPN (z. B. Tailscale oder den VPN Server von DSM).
 
 ## Zugangsschutz und HTTPS
 
