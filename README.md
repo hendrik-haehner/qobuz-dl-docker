@@ -13,65 +13,89 @@ ein, der Container lädt sie mit `qobuz-dl dl` auf dein NAS und zeigt die Ausgab
 - **Ordner- und Dateinamen** als Muster wie `{artist}/{album} ({year})`, mit Vorschau
 - alles pro Download oder als gespeicherter Standard
 
-## Auf einer Synology installieren (Container Manager)
+## Auf einer Synology installieren
 
-Beschrieben für DSM 7.2. Container Manager gibt es nur auf bestimmten Modellen
-(meist „+“-Serie). Andere NAS mit Docker-Compose (QNAP, Unraid, TrueNAS) gehen
-genauso; nur die Menüs heißen anders.
+GitHub baut das Image bei jeder Änderung automatisch, für Intel/AMD- und ARM-Modelle:
+`ghcr.io/hendrik-haehner/qobuz-dl-docker:latest`. Aufs NAS kommen nur zwei Dateien,
+kein Programmcode. Beschrieben für DSM 7.2 mit Container Manager.
 
-**1. Dateien aufs NAS bringen**
+**1. Ordner und Dateien anlegen**
 
-1. Im Paket-Zentrum **Container Manager** installieren. Dabei entsteht die Freigabe `docker`.
-2. Auf GitHub den Code als ZIP herunterladen („Code → Download ZIP“) und am PC entpacken.
-3. In der File Station den Ordner `docker/qobuz-dl-web` anlegen und den **Inhalt** des
-   entpackten Ordners hineinladen (`Dockerfile`, `docker-compose.yml`, `app/`, …).
-4. Dort außerdem einen leeren Ordner `config` anlegen.
+1. Im Paket-Zentrum **Container Manager** und **Text Editor** installieren.
+2. In der File Station den Ordner `docker/qobuz-dl-web` anlegen, darin einen leeren Ordner `config`.
+3. Darin zwei Dateien anlegen (Text Editor → Neu, Inhalt von GitHub hineinkopieren):
+   - `docker-compose.yml`: unter `volumes:` deine Freigaben eintragen, z. B.
+     `- /volume1/music:/shares/music` (links NAS-Pfad, rechts Name im Webinterface).
+     Den NAS-Pfad zeigt die File Station unter „Eigenschaften“ → „Ort“.
+   - `.env` (Vorlage: `.env.example`): mindestens
+     ```bash
+     WEB_PASSWORD=ein-langes-passwort
+     PUID=1026
+     PGID=100
+     ```
+     `PUID`/`PGID` ist der DSM-Benutzer, dem die Downloads gehören sollen
+     (herausfinden: siehe „Benutzer-ID ohne Terminal“ unten). Er braucht Lese-/Schreibrechte
+     auf die Freigaben und den Ordner `config`. Port ändern: `WEB_PORT=8095`.
 
-**2. Freigaben festlegen**: In `docker-compose.yml` unter `volumes:` die Freigaben
-eintragen (am PC vor dem Hochladen, oder später im Projekt-Editor des Container Managers):
+**2. Einmalig: Zugriff auf das private Image**
 
-```yaml
-    volumes:
-      - ./config:/home/app/.config/qobuz-dl
-      - /volume1/music:/shares/music          # links NAS-Pfad, rechts Name im Webinterface
-      - /volume1/Downloads:/shares/Downloads  # beliebig viele Freigaben
-```
+Solange das Repository privat ist, ist auch das Image privat, und das NAS muss sich bei
+`ghcr.io` anmelden:
 
-Den NAS-Pfad einer Freigabe zeigt die File Station unter „Eigenschaften“ → „Ort“.
+1. GitHub → Settings → Developer settings → Personal access tokens → **Tokens (classic)**
+   → Generate new token (classic). Nur den Haken **`read:packages`** setzen.
+   (Fine-grained Tokens funktionieren für ghcr.io nicht.)
+2. Systemsteuerung → **Aufgabenplaner** → Erstellen → Geplante Aufgabe →
+   Benutzerdefiniertes Skript. Benutzer `root`, „Aktiviert“ abwählen, Skript:
+   ```bash
+   echo "DEIN_TOKEN" | /usr/local/bin/docker login ghcr.io -u hendrik-haehner --password-stdin
+   ```
+3. Aufgabe markieren → **Ausführen**, danach die Aufgabe löschen. Die Anmeldung bleibt
+   gespeichert.
 
-**3. `.env` anlegen**: Am PC `.env.example` kopieren, als `.env` speichern, ausfüllen und
-mit in den Ordner `docker/qobuz-dl-web` laden:
+Alternativ das Image öffentlich machen (GitHub → Packages → `qobuz-dl-docker` →
+Package settings → Change visibility → Public). Dann entfällt dieser Schritt. Das Image
+enthält keine Zugangsdaten, nur den Programmcode.
 
-```bash
-WEB_PASSWORD=ein-langes-passwort
-PUID=1026
-PGID=100
-```
+**3. Starten und aktualisieren mit einem Klick**
 
-`PUID`/`PGID` ist der DSM-Benutzer, dem die heruntergeladenen Dateien gehören sollen.
-Der erste selbst angelegte Benutzer hat meist `1026`, die Gruppe `users` hat `100`.
-Genau zeigt es `id <benutzername>` per SSH. Dieser Benutzer braucht Lese-/Schreibrechte
-auf die Freigaben (Systemsteuerung → Freigegebener Ordner → Bearbeiten → Berechtigungen)
-und auf den Ordner `config`.
-
-**4. Starten**: Container Manager → **Projekt** → **Erstellen**
-
-- Projektname: `qobuz-dl-web`
-- Pfad: `docker/qobuz-dl-web`
-- Quelle: „Vorhandene docker-compose.yml verwenden“
-- Weiter → Fertig. Das Image wird auf dem NAS gebaut (dauert beim ersten Mal ein paar Minuten).
-
-Danach `http://<IP-des-NAS>:8080` öffnen, mit `WEB_PASSWORD` anmelden und unter
-„Qobuz-Konto“ die Qobuz-Zugangsdaten eingeben.
-
-**Aktualisieren:** neue Dateien in den Ordner laden (`config/` und `.env` behalten),
-dann im Container Manager das Projekt stoppen und mit „Erstellen“ neu bauen.
-
-**Per SSH** statt Oberfläche, im Ordner `/volume1/docker/qobuz-dl-web`:
+Aufgabenplaner → Erstellen → Geplante Aufgabe → Benutzerdefiniertes Skript.
+Name `qobuz-dl-web aktualisieren`, Benutzer `root`, Skript:
 
 ```bash
-sudo docker compose up -d --build
+export PATH=/usr/local/bin:/usr/bin:/bin:$PATH
+cd /volume1/docker/qobuz-dl-web || exit 1
+if docker compose version >/dev/null 2>&1; then DC="docker compose"; else DC="docker-compose"; fi
+$DC pull && $DC up -d && docker image prune -f
 ```
+
+- **Ausführen** startet den Container beim ersten Mal und holt später die neueste Version.
+- Mit einem Zeitplan (z. B. wöchentlich nachts) aktualisiert er sich automatisch.
+- Ob es geklappt hat: Aufgabe markieren → Aktion → **Ergebnis anzeigen**. Der Container
+  erscheint im Container Manager unter **Container**.
+
+Danach `http://<IP-des-NAS>:8080` öffnen (bzw. dein `WEB_PORT`), mit `WEB_PASSWORD`
+anmelden und unter „Qobuz-Konto“ die Qobuz-Zugangsdaten eingeben. Eine funktionierende
+`config.ini` von qobuz-dl kannst du stattdessen auch nach `config/` kopieren.
+
+**Umstieg von der Installation mit Quellcode:** In deiner `docker-compose.yml` die
+Zeilen `build: .` und `image: qobuz-dl-web:latest` durch
+`image: ghcr.io/hendrik-haehner/qobuz-dl-docker:latest` ersetzen und oben `name: qobuz-dl-web`
+ergänzen (siehe aktuelle `docker-compose.yml`). Dann Schritt 2 und 3. Die
+Programmdateien (`app/`, `Dockerfile` usw.) im Ordner kannst du danach löschen;
+`docker-compose.yml`, `.env` und `config/` bleiben.
+
+### Benutzer-ID ohne Terminal
+
+Aufgabenplaner → Benutzerdefiniertes Skript, Benutzer `root`, „Aktiviert“ abwählen:
+
+```bash
+id deinbenutzername > /volume1/docker/id.txt
+```
+
+Ausführen und `docker/id.txt` öffnen: `uid=1026(…) gid=100(users)` heißt `PUID=1026`,
+`PGID=100`. Im Webinterface zeigt der Dialog „Ordner wählen“ außerdem, mit welcher
+ID der Container tatsächlich zugreift.
 
 ## Freigaben einbinden
 
@@ -186,6 +210,16 @@ SHARES_DIR=dev-shares ALLOW_UNMOUNTED_SHARES=1 .venv/bin/uvicorn app.main:app --
 ```
 
 `ALLOW_UNMOUNTED_SHARES=1` schaltet die Mount-Prüfung ab, nur für die Entwicklung.
+
+Image selbst bauen statt von ghcr.io laden:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+```
+
+Die CI (`.github/workflows/ci.yml`) testet jeden Pull Request und baut das Image
+für amd64 und arm64. Auf `main` und bei Tags `v*` wird es nach ghcr.io veröffentlicht
+(`latest`, Version, Commit-Kürzel).
 
 ## Rechtliches
 
