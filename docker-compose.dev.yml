@@ -1,0 +1,6 @@
+# Image aus dem Quellcode bauen statt das fertige von ghcr.io zu laden:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+services:
+  qobuz-dl-web:
+    build: .
+    image: qobuz-dl-web:dev

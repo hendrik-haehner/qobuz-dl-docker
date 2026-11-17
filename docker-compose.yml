@@ -1,7 +1,11 @@
+# Projektname fest, damit Container Manager und `docker compose` dasselbe Projekt meinen
+name: qobuz-dl-web
+
 services:
   qobuz-dl-web:
-    build: .
-    image: qobuz-dl-web:latest
+    # Fertiges Image, von GitHub Actions gebaut (Intel/AMD und ARM).
+    # Selbst bauen statt herunterladen: siehe docker-compose.dev.yml
+    image: ghcr.io/hendrik-haehner/qobuz-dl-docker:latest
     container_name: qobuz-dl-web
     restart: unless-stopped
     # Mit diesem Benutzer schreibt der Container auf das NAS (siehe README).
