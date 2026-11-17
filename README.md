@@ -118,6 +118,22 @@ anlegen, nur Unterordner in einer Freigabe.
 
 Gibt es genau eine Freigabe, ist sie automatisch der Speicherort.
 
+## Vorhandene Ordner und Dateien
+
+Es wird nie etwas überschrieben:
+
+- Existiert der Album-Ordner schon, nutzt qobuz-dl ihn mit. Titel, deren Datei schon
+  da ist, werden übersprungen; fehlende kommen dazu. Ein vorhandenes `cover.jpg` bleibt.
+- qobuz-dl merkt sich jedes geladene Album (Datenbank in `config/`). Ein zweiter
+  Download desselben Albums wird komplett übersprungen, auch in anderer Qualität.
+  Mit **„Erneut herunterladen“** gilt das für diesen einen Download nicht.
+- In der Download-Liste steht dann **„übersprungen“** mit dem Grund, und bei Erfolg,
+  wie viele Titel neu und wie viele schon vorhanden waren.
+
+Für eine zweite Qualität desselben Albums sollte das Ordnermuster `{bit_depth}` und
+`{sampling_rate}` enthalten (wie der Standard), sonst landen beide im selben Ordner
+und die Titel gelten als schon vorhanden.
+
 ## Zugangsschutz und HTTPS
 
 Mit `WEB_PASSWORD` fragt die Seite nach einem Passwort. Nach dem Anmelden gilt die
@@ -189,7 +205,7 @@ Sitzung (sonst `401`).
 | `GET` | `/api/folders?path=music/Rock` | Freigaben (ohne `path`) bzw. Unterordner |
 | `POST` | `/api/folders` | `{"parent": "music", "name": "Hi-Res"}` legt einen Ordner an |
 | `GET` | `/api/downloads`, `/api/downloads/{id}` | Jobs mit den letzten 200 Log-Zeilen |
-| `POST` | `/api/downloads` | `{"url": "..."}`, optional mit Feldern aus `/api/settings` |
+| `POST` | `/api/downloads` | `{"url": "..."}`, optional mit Feldern aus `/api/settings` und `"redownload": true` |
 
 Platzhalter für Ordner: `{artist} {album} {year} {bit_depth} {sampling_rate}`.
 Für Dateien: `{artist} {albumartist} {tracktitle} {tracknumber} {version} {bit_depth} {sampling_rate}`.

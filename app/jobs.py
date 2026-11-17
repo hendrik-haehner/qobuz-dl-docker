@@ -1,6 +1,7 @@
 """Download-Warteschlange: ruft qobuz-dl als Subprozess auf, ein Job nach dem anderen."""
 
 import asyncio
+import codecs
 import re
 import uuid
 from collections import deque
@@ -16,21 +17,54 @@ ALLOWED_URL = re.compile(
     r"^https://(open|play|www)\.qobuz\.com/\S+$|^https://(www\.)?last\.fm/\S+$"
 )
 LOG_LINES = 200
+READ_CHUNK = 4096
 # Farbcodes von colorama/tqdm aus der Ausgabe entfernen
 ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
+
+# Zeilen, an denen qobuz-dl erkennbar ist (siehe qobuz_dl/core.py, downloader.py)
+NEW_TRACK = re.compile(r" /// .*\.\d+\.tmp$")  # fertiger Fortschrittsbalken eines Titels
+EXISTING = re.compile(r"^(?!(cover\.jpg|booklet\.pdf) ).+ was already downloaded$")
+RELEASE_IN_DB = re.compile(r"was already downloaded according to the local database")
+UNAVAILABLE = re.compile(r"Track not available for download")
 
 
 class JobStatus(str, Enum):
     queued = "queued"
     running = "running"
     done = "done"
+    skipped = "skipped"  # fehlerfrei, aber nichts Neues geladen
     failed = "failed"
+
+
+@dataclass
+class Summary:
+    new: int = 0
+    existing: int = 0
+    unavailable: int = 0
+    releases_in_db: int = 0
+
+    def feed(self, line: str) -> None:
+        if NEW_TRACK.search(line):
+            self.new += 1
+        elif RELEASE_IN_DB.search(line):
+            self.releases_in_db += 1
+        elif EXISTING.search(line):
+            self.existing += 1
+        elif UNAVAILABLE.search(line):
+            self.unavailable += 1
+
+    @property
+    def nothing_new(self) -> bool:
+        return self.new == 0 and (self.existing or self.releases_in_db or self.unavailable) > 0
 
 
 @dataclass
 class Job:
     url: str
     options: Preferences
+    # Datenbank von qobuz-dl ignorieren (--no-db): schon geladene Alben erneut holen
+    redownload: bool = False
+    summary: Summary = field(default_factory=Summary)
     id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     status: JobStatus = JobStatus.queued
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
@@ -45,7 +79,14 @@ class Job:
             "format": self.options.format,
             "quality": self.options.quality,
             "target_dir": self.options.target_dir,
+            "redownload": self.redownload,
             "status": self.status.value,
+            "summary": {
+                "new": self.summary.new,
+                "existing": self.summary.existing,
+                "unavailable": self.summary.unavailable,
+                "releases_in_db": self.summary.releases_in_db,
+            },
             "created_at": self.created_at.isoformat(),
             "finished_at": self.finished_at.isoformat() if self.finished_at else None,
             "return_code": self.return_code,
@@ -61,7 +102,7 @@ def validate(url: str) -> None:
 def build_command(settings: Settings, job: Job) -> list[str]:
     # Liste statt Shell-String: keine Shell-Injection möglich
     o = job.options
-    return [
+    cmd = [
         settings.qobuz_dl_bin,
         "dl",
         job.url,
@@ -74,6 +115,28 @@ def build_command(settings: Settings, job: Job) -> list[str]:
         "-tf",
         o.track_format,
     ]
+    if job.redownload:
+        cmd.append("--no-db")
+    return cmd
+
+
+async def read_lines(stream: asyncio.StreamReader):
+    """Ausgabe in Blöcken lesen und in Zeilen zerlegen.
+
+    tqdm überschreibt seinen Fortschrittsbalken mit \\r und schreibt erst am Ende
+    eines Titels \\n. Zeilenweises Lesen würde bei langen Titeln am 64-KB-Limit
+    von StreamReader.readline scheitern; hier bleibt nur der letzte Stand übrig.
+    """
+    decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+    buf = ""
+    while chunk := await stream.read(READ_CHUNK):
+        buf += decoder.decode(chunk)  # Umlaute können über Blockgrenzen gehen
+        *lines, buf = buf.split("\n")
+        for line in lines:
+            yield line.split("\r")[-1]
+        buf = buf.split("\r")[-1] if "\r" in buf else buf[-READ_CHUNK:]
+    if buf:
+        yield buf.split("\r")[-1]
 
 
 class JobManager:
@@ -96,11 +159,11 @@ class JobManager:
                 pass
             self._worker = None
 
-    def submit(self, url: str, options: Preferences) -> Job:
+    def submit(self, url: str, options: Preferences, redownload: bool = False) -> Job:
         url = url.strip()
         validate(url)
         check_target(self.settings.shares_dir, options.target_dir)
-        job = Job(url=url, options=options)
+        job = Job(url=url, options=options, redownload=redownload)
         self.jobs[job.id] = job
         self._queue.put_nowait(job)
         return job
@@ -129,13 +192,18 @@ class JobManager:
                 stderr=asyncio.subprocess.STDOUT,
             )
             assert proc.stdout is not None
-            async for raw in proc.stdout:
-                # tqdm nutzt \r für Fortschrittsbalken, nur der letzte Stand zählt
-                line = ANSI.sub("", raw.decode(errors="replace")).split("\r")[-1].rstrip()
+            async for raw in read_lines(proc.stdout):
+                line = ANSI.sub("", raw).rstrip()
                 if line:
                     job.log.append(line)
+                    job.summary.feed(line)
             job.return_code = await proc.wait()
-            job.status = JobStatus.done if job.return_code == 0 else JobStatus.failed
+            if job.return_code != 0:
+                job.status = JobStatus.failed
+            elif job.summary.nothing_new:
+                job.status = JobStatus.skipped
+            else:
+                job.status = JobStatus.done
         except Exception as exc:
             job.log.append(f"Fehler: {exc}")
             job.status = JobStatus.failed
