@@ -1,0 +1,60 @@
+:root {
+  --bg: #f7f7f8;
+  --fg: #1c1c1f;
+  --muted: #6b6b73;
+  --card: #ffffff;
+  --border: #dedee3;
+  --accent: #2f5bea;
+  --ok: #1f8a4c;
+  --bad: #c62f2f;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #141416;
+    --fg: #ececf0;
+    --muted: #9a9aa3;
+    --card: #1e1e22;
+    --border: #33333a;
+    --accent: #7c9bff;
+    --ok: #4cc17f;
+    --bad: #ff6b6b;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 16px/1.5 system-ui, sans-serif;
+}
+main { max-width: 760px; margin: 0 auto; padding: 24px 16px; }
+h1 { margin: 0 0 4px; }
+.muted { color: var(--muted); }
+.error { color: var(--bad); }
+form { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
+input, select, button {
+  font: inherit;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--fg);
+}
+input { flex: 1 1 280px; min-width: 0; }
+button { background: var(--accent); border-color: var(--accent); color: #fff; cursor: pointer; }
+ul { list-style: none; padding: 0; }
+.job {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+.job-head { display: flex; gap: 8px; align-items: baseline; }
+.url { overflow-wrap: anywhere; }
+.badge { font-size: 12px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--border); }
+.done .badge { color: var(--ok); border-color: var(--ok); }
+.failed .badge { color: var(--bad); border-color: var(--bad); }
+.running .badge { color: var(--accent); border-color: var(--accent); }
+summary { color: var(--muted); cursor: pointer; overflow-wrap: anywhere; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; max-height: 300px; overflow: auto; }

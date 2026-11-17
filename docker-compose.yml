@@ -1,0 +1,14 @@
+services:
+  qobuz-dl-web:
+    build: .
+    image: qobuz-dl-web:latest
+    container_name: qobuz-dl-web
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    ports:
+      - "${WEB_PORT:-8080}:8080"
+    volumes:
+      - ./config:/home/app/.config/qobuz-dl
+      - ./downloads:/downloads

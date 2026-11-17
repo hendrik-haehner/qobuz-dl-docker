@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>qobuz-dl web</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <main>
+    <h1>qobuz-dl web</h1>
+    <p id="config-status" class="muted">Prüfe Konfiguration …</p>
+
+    <form id="dl-form">
+      <input id="url" type="url" required placeholder="https://open.qobuz.com/album/…">
+      <select id="quality">
+        <option value="5">MP3 320</option>
+        <option value="6">FLAC 16/44.1</option>
+        <option value="7">FLAC 24 ≤ 96 kHz</option>
+        <option value="27">FLAC 24 &gt; 96 kHz</option>
+      </select>
+      <button type="submit">Herunterladen</button>
+    </form>
+    <p id="form-error" class="error" hidden></p>
+
+    <h2>Downloads</h2>
+    <ul id="jobs"></ul>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>
