@@ -109,19 +109,18 @@ function renderAccount(a, membership = "") {
   $("login-cancel").hidden = true;
   $("account-email").textContent = a.email || "unbekannt";
   $("account-membership").textContent = membership ? `(${membership})` : "";
-  if (!a.configured) $("login-email").value = a.email || "";
+  $("legacy-warning").hidden = !(a.configured && a.auth_method === "password");
 }
 
 $("account-change").onclick = () => {
-  $("login-email").value = account.email || "";
   $("login-form").hidden = false;
   $("login-cancel").hidden = false;
   $("account-info").hidden = true;
   accountMsg("");
-  $("login-password").focus();
+  $("login-token").focus();
 };
 $("login-cancel").onclick = () => {
-  $("login-password").value = "";
+  $("login-token").value = "";
   accountMsg("");
   renderAccount(account);
 };
@@ -140,14 +139,14 @@ $("login-form").addEventListener("submit", async (e) => {
   try {
     const res = await api("/api/account", {
       method: "PUT",
-      body: { email: $("login-email").value.trim(), password: $("login-password").value },
+      body: { token: $("login-token").value.trim() },
     });
     renderAccount(res, res.membership);
     accountMsg("Angemeldet.", true);
   } catch (err) {
     accountMsg(err.message, false);
   } finally {
-    $("login-password").value = "";
+    $("login-token").value = "";
     btn.disabled = false;
     btn.textContent = "Anmelden";
   }
@@ -294,6 +293,9 @@ const STATUS_LABEL = {
 function summaryText(job) {
   const s = job.summary;
   if (job.status === "queued") return "";
+  if (s.auth_failed) {
+    return "Qobuz hat die Anmeldung abgelehnt. Oben unter „Qobuz-Konto“ einen neuen Token eintragen.";
+  }
   if (s.releases_in_db && !s.new) {
     return "Schon einmal geladen, darum übersprungen. Mit „Erneut herunterladen“ noch einmal holen.";
   }

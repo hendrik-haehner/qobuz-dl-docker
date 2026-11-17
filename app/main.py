@@ -31,8 +31,8 @@ class DownloadRequest(BaseModel):
 
 
 class Credentials(BaseModel):
-    email: str
-    password: str
+    # user_auth_token aus einer angemeldeten Browser-Sitzung (siehe app/token_auth.py)
+    token: str
 
 
 class WebLogin(BaseModel):
@@ -146,9 +146,9 @@ def get_account():
 
 @app.put("/api/account")
 def put_account(creds: Credentials):
-    """Zugangsdaten bei Qobuz prüfen und speichern (Dauer: einige Sekunden)."""
+    """Token bei Qobuz prüfen und speichern (Dauer: einige Sekunden)."""
     try:
-        return qobuz_config.login(get_settings(), creds.email, creds.password)
+        return qobuz_config.login(get_settings(), creds.token)
     except qobuz_config.LoginError as exc:
         raise HTTPException(422, str(exc)) from exc
     except OSError as exc:

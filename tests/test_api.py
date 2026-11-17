@@ -97,25 +97,27 @@ def test_settings_save_error_is_reported(env, monkeypatch):
 def test_account_flow(env, monkeypatch):
     monkeypatch.setattr("app.qobuz_config._fetch_tokens", lambda: ("123456789", ["s"]))
 
-    def verify(email, pwd_md5, app_id, secrets):
-        from qobuz_dl.exceptions import AuthenticationError
-        if pwd_md5 != __import__("hashlib").md5(b"richtig").hexdigest():
-            raise AuthenticationError()
-        return "Studio"
+    def verify(token, app_id, secrets):
+        from app.token_auth import TokenError
+        if token != "geheimer-token":
+            raise TokenError("ungültig")
+        return {"token": "frisch-geheim", "email": "a@b.c", "label": "Studio", "can_download": True}
 
     monkeypatch.setattr("app.qobuz_config._verify", verify)
     with TestClient(app) as client:
-        assert client.get("/api/account").json() == {"configured": False, "email": None}
-        res = client.put("/api/account", json={"email": "a@b.c", "password": "falsch"})
-        assert res.status_code == 422 and "falsch" in res.json()["detail"]
-        res = client.put("/api/account", json={"email": "a@b.c", "password": "richtig"})
-        assert res.json() == {"configured": True, "email": "a@b.c", "membership": "Studio"}
+        assert client.get("/api/account").json() == {"configured": False, "email": None, "auth_method": None}
+        res = client.put("/api/account", json={"token": "falsch"})
+        assert res.status_code == 422 and "abgelehnt" in res.json()["detail"]
+        # alte Anmeldeform wird nicht mehr angenommen
+        assert client.put("/api/account", json={"email": "a", "password": "b"}).status_code == 422
+        res = client.put("/api/account", json={"token": "geheimer-token"})
+        assert res.json() == {"configured": True, "email": "a@b.c", "auth_method": "token", "membership": "Studio"}
         status = client.get("/api/status").json()
         assert (status["configured"], status["email"]) == (True, "a@b.c")
-        # Passwort/Hash wird nirgends ausgeliefert
-        for path in ("/api/account", "/api/status"):
+        # Token wird nirgends ausgeliefert
+        for path in ("/api/account", "/api/status", "/api/settings"):
             body = client.get(path).text
-            assert "richtig" not in body and "password" not in body
+            assert "geheim" not in body, path
         assert client.delete("/api/account").status_code == 204
         assert client.get("/api/account").json()["configured"] is False
         assert client.post("/api/downloads", json={"url": URL}).status_code == 409

@@ -47,6 +47,14 @@ def test_nothing_new(text):
     assert summarize(text + "\n").nothing_new
 
 
+@pytest.mark.parametrize("line", [
+    "qobuz_dl.exceptions.AuthenticationError: Qobuz-Token ungültig oder abgelaufen. Im Webinterface …",
+    "qobuz_dl.exceptions.AuthenticationError: Invalid credentials.",
+])
+def test_auth_failed(line):
+    assert summarize(line + "\n").auth_failed
+
+
 def test_cover_alone_is_not_a_track():
     s = summarize(COVER_EXISTING + "\n")
     assert s.existing == 0 and not s.nothing_new

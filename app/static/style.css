@@ -97,6 +97,12 @@ details#naming .field { margin-bottom: 10px; }
 .account-info strong { overflow-wrap: anywhere; }
 .account-info .actions { margin-left: auto; }
 .login { display: grid; gap: 12px; }
+.howto { border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; }
+.howto summary { color: var(--accent); }
+.howto ol { margin: 8px 0; padding-left: 20px; display: grid; gap: 6px; }
+.howto p { margin: 6px 0 0; }
+kbd { font: 12px ui-monospace, monospace; border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
+#legacy-warning { margin: 10px 0 0; }
 .login p, #account-msg { margin: 0; }
 button:disabled { opacity: 0.6; cursor: progress; }
 
@@ -142,6 +148,7 @@ ul { list-style: none; padding: 0; }
 .running .badge { color: var(--accent); border-color: var(--accent); }
 .skipped .badge { color: var(--warn); border-color: var(--warn); }
 .skipped .job-summary { color: var(--warn); }
+.failed .job-summary { color: var(--bad); }
 .job-summary { margin-top: 2px; }
 .check { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
 .check input { width: auto; margin-top: 4px; flex: none; }

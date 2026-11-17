@@ -1,29 +1,31 @@
 import configparser
-import hashlib
 import stat
 
 import pytest
 import requests
-from qobuz_dl.exceptions import AuthenticationError, IneligibleError, InvalidAppSecretError
+from qobuz_dl.exceptions import InvalidAppSecretError
 
 from app import qobuz_config
 from app.qobuz_config import LoginError
 from app.settings import get_settings
+from app.token_auth import TokenError
+
+GOOD = "gueltiger-token"
 
 
 @pytest.fixture
 def fake_qobuz(monkeypatch):
-    """Ersetzt die Netzwerkaufrufe: Passwort 'richtig' ist korrekt."""
+    """Ersetzt die Netzwerkaufrufe: nur GOOD ist ein gültiger Token."""
     calls = []
     monkeypatch.setattr(qobuz_config, "_fetch_tokens", lambda: ("123456789", ["s1", "s2"]))
 
-    def verify(email, pwd_md5, app_id, secrets):
-        calls.append((email, pwd_md5, app_id, secrets))
-        if email == "frei@b.c":
-            raise IneligibleError()
-        if pwd_md5 != hashlib.md5(b"richtig").hexdigest():
-            raise AuthenticationError()
-        return "Studio"
+    def verify(token, app_id, secrets):
+        calls.append((token, app_id, secrets))
+        if token == "frei":
+            return {"token": "t", "email": "frei@b.c", "label": "", "can_download": False}
+        if token != GOOD:
+            raise TokenError("ungültig")
+        return {"token": "frisch", "email": "a@b.c", "label": "Studio", "can_download": True}
 
     monkeypatch.setattr(qobuz_config, "_verify", verify)
     return calls
@@ -31,11 +33,11 @@ def fake_qobuz(monkeypatch):
 
 def test_build_config_matches_qobuz_dl_keys():
     cfg = qobuz_config.build_config(
-        "a@b.c", "geheim", "123456789", ["s1", "s2"],
-        shares_dir="/downloads", quality=27, folder_format="F", track_format="T",
+        "a@b.c", "tok", "123456789", ["s1", "s2"],
+        shares_dir="/shares", quality=27, folder_format="F", track_format="T",
     )
     d = cfg["DEFAULT"]
-    assert d["password"] == hashlib.md5(b"geheim").hexdigest()
+    assert d["password"] == "tok" and d["auth_method"] == "token"
     assert d["secrets"] == "s1,s2"
     assert d["default_quality"] == "27"
     # Diese Schlüssel liest qobuz_dl.cli.main() und bricht ab, wenn einer fehlt
@@ -51,35 +53,32 @@ def test_build_config_rejects_quality():
                                   folder_format="F", track_format="T")
 
 
-def test_login_writes_config_only_hash(env, fake_qobuz):
+def test_login_stores_refreshed_token(env, fake_qobuz):
     s = get_settings()
-    res = qobuz_config.login(s, "  a@b.c ", "richtig")
-    assert res == {"configured": True, "email": "a@b.c", "membership": "Studio"}
-    text = s.config_file.read_text()
-    assert "richtig" not in text
+    res = qobuz_config.login(s, f"  {GOOD} ")
+    assert res == {"configured": True, "email": "a@b.c", "auth_method": "token", "membership": "Studio"}
+    assert fake_qobuz[0] == (GOOD, "123456789", ["s1", "s2"])
     cfg = configparser.ConfigParser()
     cfg.read(s.config_file)
-    assert cfg["DEFAULT"]["password"] == hashlib.md5(b"richtig").hexdigest()
-    assert cfg["DEFAULT"]["app_id"] == "123456789"
+    assert cfg["DEFAULT"]["password"] == "frisch"  # der von Qobuz erneuerte Token
+    assert cfg["DEFAULT"]["auth_method"] == "token"
     assert stat.S_IMODE(s.config_file.stat().st_mode) == 0o600
-    assert fake_qobuz[0][0] == "a@b.c"
 
 
 @pytest.mark.parametrize(
-    "email,password,msg",
+    "token,msg",
     [
-        ("a@b.c", "falsch", "falsch"),
-        ("frei@b.c", "richtig", "kostenloses Konto"),
-        ("", "richtig", "angeben"),
-        ("a@b.c", "", "angeben"),
+        ("falsch", "abgelehnt"),
+        ("frei", "kein Download-Abo"),
+        ("   ", "Token aus dem Browser"),
     ],
 )
-def test_login_errors_keep_existing_config(env, fake_qobuz, email, password, msg):
+def test_login_errors_keep_existing_config(env, fake_qobuz, token, msg):
     s = get_settings()
-    qobuz_config.login(s, "alt@b.c", "richtig")
+    qobuz_config.login(s, GOOD)
     with pytest.raises(LoginError, match=msg):
-        qobuz_config.login(s, email, password)
-    assert qobuz_config.account(s)["email"] == "alt@b.c"
+        qobuz_config.login(s, token)
+    assert qobuz_config.account(s)["email"] == "a@b.c"
 
 
 @pytest.mark.parametrize(
@@ -94,40 +93,41 @@ def test_login_maps_technical_errors(env, monkeypatch, exc, msg):
         raise exc
     monkeypatch.setattr(qobuz_config, "_fetch_tokens", boom)
     with pytest.raises(LoginError, match=msg):
-        qobuz_config.login(get_settings(), "a@b.c", "x")
+        qobuz_config.login(get_settings(), "x")
     assert not get_settings().config_file.exists()
+
+
+def test_account_reports_legacy_password_login(configured):
+    # kopierte config.ini von qobuz-dl ohne auth_method
+    assert qobuz_config.account(get_settings())["auth_method"] == "password"
 
 
 def test_logout(env, fake_qobuz):
     s = get_settings()
-    qobuz_config.login(s, "a@b.c", "richtig")
+    qobuz_config.login(s, GOOD)
     qobuz_config.logout(s)
-    assert qobuz_config.account(s) == {"configured": False, "email": None}
+    assert qobuz_config.account(s) == {"configured": False, "email": None, "auth_method": None}
     qobuz_config.logout(s)  # zweimal ist kein Fehler
 
 
-def test_ensure_config_without_credentials(env, monkeypatch):
-    monkeypatch.delenv("QOBUZ_EMAIL", raising=False)
-    monkeypatch.delenv("QOBUZ_PASSWORD", raising=False)
+def test_ensure_config_without_token(env, monkeypatch):
+    monkeypatch.delenv("QOBUZ_TOKEN", raising=False)
     assert qobuz_config.ensure_config() is False
     assert not get_settings().config_file.exists()
 
 
 def test_ensure_config_from_env(env, fake_qobuz, monkeypatch):
-    monkeypatch.setenv("QOBUZ_EMAIL", "a@b.c")
-    monkeypatch.setenv("QOBUZ_PASSWORD", "richtig")
+    monkeypatch.setenv("QOBUZ_TOKEN", GOOD)
     assert qobuz_config.ensure_config() is True
     assert qobuz_config.account(get_settings())["email"] == "a@b.c"
 
 
-def test_ensure_config_wrong_env_password(env, fake_qobuz, monkeypatch):
-    monkeypatch.setenv("QOBUZ_EMAIL", "a@b.c")
-    monkeypatch.setenv("QOBUZ_PASSWORD", "falsch")
+def test_ensure_config_invalid_env_token(env, fake_qobuz, monkeypatch):
+    monkeypatch.setenv("QOBUZ_TOKEN", "falsch")
     assert qobuz_config.ensure_config() is False
 
 
 def test_ensure_config_keeps_existing(configured, fake_qobuz, monkeypatch):
-    monkeypatch.setenv("QOBUZ_EMAIL", "neu@b.c")
-    monkeypatch.setenv("QOBUZ_PASSWORD", "richtig")
+    monkeypatch.setenv("QOBUZ_TOKEN", GOOD)
     assert qobuz_config.ensure_config() is True
     assert fake_qobuz == []

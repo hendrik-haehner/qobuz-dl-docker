@@ -3,11 +3,14 @@
 import asyncio
 import codecs
 import re
+import sys
 import uuid
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
+
+from pathlib import Path
 
 from app.preferences import Preferences, qobuz_quality
 from app.settings import Settings
@@ -18,6 +21,8 @@ ALLOWED_URL = re.compile(
 )
 LOG_LINES = 200
 READ_CHUNK = 4096
+# Projektordner, damit `python -m app.qdl_runner` das Paket findet
+PROJECT_DIR = Path(__file__).resolve().parent.parent
 # Farbcodes von colorama/tqdm aus der Ausgabe entfernen
 ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
 
@@ -26,6 +31,8 @@ NEW_TRACK = re.compile(r" /// .*\.\d+\.tmp$")  # fertiger Fortschrittsbalken ein
 EXISTING = re.compile(r"^(?!(cover\.jpg|booklet\.pdf) ).+ was already downloaded$")
 RELEASE_IN_DB = re.compile(r"was already downloaded according to the local database")
 UNAVAILABLE = re.compile(r"Track not available for download")
+# Anmeldung abgelehnt: Token abgelaufen bzw. alte Passwort-Anmeldung
+AUTH_FAILED = re.compile(r"Qobuz-Token ungültig oder abgelaufen|Invalid credentials")
 
 
 class JobStatus(str, Enum):
@@ -42,9 +49,12 @@ class Summary:
     existing: int = 0
     unavailable: int = 0
     releases_in_db: int = 0
+    auth_failed: bool = False
 
     def feed(self, line: str) -> None:
-        if NEW_TRACK.search(line):
+        if AUTH_FAILED.search(line):
+            self.auth_failed = True
+        elif NEW_TRACK.search(line):
             self.new += 1
         elif RELEASE_IN_DB.search(line):
             self.releases_in_db += 1
@@ -86,6 +96,7 @@ class Job:
                 "existing": self.summary.existing,
                 "unavailable": self.summary.unavailable,
                 "releases_in_db": self.summary.releases_in_db,
+                "auth_failed": self.summary.auth_failed,
             },
             "created_at": self.created_at.isoformat(),
             "finished_at": self.finished_at.isoformat() if self.finished_at else None,
@@ -102,8 +113,12 @@ def validate(url: str) -> None:
 def build_command(settings: Settings, job: Job) -> list[str]:
     # Liste statt Shell-String: keine Shell-Injection möglich
     o = job.options
+    program = (
+        [settings.qobuz_dl_bin] if settings.qobuz_dl_bin
+        else [sys.executable, "-m", "app.qdl_runner"]
+    )
     cmd = [
-        settings.qobuz_dl_bin,
+        *program,
         "dl",
         job.url,
         "-q",
@@ -190,6 +205,7 @@ class JobManager:
                 stdin=asyncio.subprocess.DEVNULL,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
+                cwd=PROJECT_DIR,
             )
             assert proc.stdout is not None
             async for raw in read_lines(proc.stdout):
