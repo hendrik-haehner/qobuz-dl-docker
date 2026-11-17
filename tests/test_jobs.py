@@ -15,7 +15,7 @@ URL = "https://open.qobuz.com/album/a"
 def make_settings(tmp_path: Path, bin_path: str = "qobuz-dl") -> Settings:
     (tmp_path / "dl").mkdir(exist_ok=True)
     return Settings(
-        download_dir=tmp_path / "dl",
+        shares_dir=tmp_path / "dl",
         config_dir=tmp_path / "cfg",
         qobuz_dl_bin=bin_path,
         default_quality=6,
@@ -56,7 +56,7 @@ def test_build_command_flac(tmp_path):
                        folder_format="{artist}/{album}", track_format="{tracknumber} {tracktitle}")
     cmd = build_command(s, Job(url=URL, options=opts))
     assert cmd == [
-        "qobuz-dl", "dl", URL, "-q", "27", "-d", str((s.download_dir / "Hi-Res").resolve()),
+        "qobuz-dl", "dl", URL, "-q", "27", "-d", str((s.shares_dir / "Hi-Res").resolve()),
         "-ff", "{artist}/{album}", "-tf", "{tracknumber} {tracktitle}",
     ]
 
@@ -65,7 +65,7 @@ def test_build_command_mp3_ignores_flac_quality(tmp_path):
     s = make_settings(tmp_path)
     cmd = build_command(s, Job(url=URL, options=Preferences(format="mp3", quality=27)))
     assert cmd[cmd.index("-q") + 1] == "5"
-    assert cmd[cmd.index("-d") + 1] == str(s.download_dir.resolve())
+    assert cmd[cmd.index("-d") + 1] == str(s.shares_dir.resolve())
 
 
 @pytest.mark.parametrize("code,status", [(0, JobStatus.done), (1, JobStatus.failed)])
@@ -89,7 +89,7 @@ def test_missing_binary_marks_failed(tmp_path):
 
 def test_submit_rejects_symlink_escape(tmp_path):
     s = make_settings(tmp_path)
-    (s.download_dir / "raus").symlink_to(tmp_path)
+    (s.shares_dir / "raus").symlink_to(tmp_path)
     manager = JobManager(s)
     with pytest.raises(StorageError):
         manager.submit(URL, Preferences(target_dir="raus"))

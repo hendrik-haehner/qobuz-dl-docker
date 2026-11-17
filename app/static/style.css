@@ -7,6 +7,8 @@
   --accent: #2f5bea;
   --ok: #1f8a4c;
   --bad: #c62f2f;
+  --warn: #b7791f;
+  --warn-bg: #fdf6e7;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -18,6 +20,8 @@
     --accent: #7c9bff;
     --ok: #4cc17f;
     --bad: #ff6b6b;
+    --warn: #e0a84a;
+    --warn-bg: #2b2416;
   }
 }
 * { box-sizing: border-box; }
@@ -30,6 +34,15 @@ body {
 }
 main { max-width: 760px; margin: 0 auto; padding: 24px 16px; }
 h1 { margin: 0 0 4px; }
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+main.narrow { max-width: 420px; padding-top: 12vh; }
+.warning {
+  border: 1px solid var(--warn);
+  background: var(--warn-bg);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 12px 0 0;
+}
 .muted { color: var(--muted); }
 .error { color: var(--bad); }
 input, select, button {
@@ -104,7 +117,12 @@ dialog::backdrop { background: rgb(0 0 0 / 0.4); }
 .dirs li + li { border-top: 1px solid var(--border); }
 .dirs .empty { padding: 10px 12px; }
 button.dir { width: 100%; text-align: left; background: none; border: 0; border-radius: 0; color: var(--fg); padding: 10px 12px; }
-button.dir::before { content: "📁 "; }
+button.dir { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+button.dir::before { content: "📁"; }
+button.dir small { margin-left: auto; }
+.path.unset { color: var(--muted); font-style: italic; }
+#browser-hint:empty { display: none; }
+.browser p { margin: 0; }
 button.dir:hover { background: var(--bg); }
 .new-folder { display: flex; gap: 8px; }
 .empty { list-style: none; }

@@ -1,33 +1,31 @@
-# syntax=docker/dockerfile:1
 FROM python:3.13-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     HOME=/home/app \
-    DOWNLOAD_DIR=/downloads
+    SHARES_DIR=/shares \
+    # Reverse-Proxy (z. B. DSM) meldet per X-Forwarded-Proto, dass HTTPS benutzt wird
+    FORWARDED_ALLOW_IPS=*
 
+# /shares bekommt bewusst KEIN VOLUME: Freigaben werden einzeln darunter
+# eingebunden, und was dort nicht eingebunden ist, erkennt die App als "nur im Container".
 RUN useradd --create-home --uid 1000 app \
-    && mkdir -p /downloads /home/app/.config/qobuz-dl \
-    && chown -R app:app /downloads /home/app \
+    && mkdir -p /shares /home/app/.config/qobuz-dl \
+    && chown -R app:app /home/app \
     # Andere UIDs (PUID/PGID, z. B. NAS-Benutzer) müssen den Config-Mount erreichen
     && chmod 755 /home/app /home/app/.config
 
 WORKDIR /srv
 COPY requirements.txt .
-# Optional: eigenes CA-Zertifikat für Proxys mit TLS-Inspektion (z. B. Cloud-Sandbox),
-# nur zur Build-Zeit, landet nicht im Image:
-#   docker build --secret id=pip_cert,src=/pfad/ca.crt ...
-RUN --mount=type=secret,id=pip_cert,required=false \
-    if [ -f /run/secrets/pip_cert ]; then export PIP_CERT=/run/secrets/pip_cert; fi; \
-    pip install -r requirements.txt
+RUN pip install -r requirements.txt
 
 COPY app ./app
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 USER app
-VOLUME ["/downloads", "/home/app/.config/qobuz-dl"]
+VOLUME ["/home/app/.config/qobuz-dl"]
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \

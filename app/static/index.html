@@ -8,7 +8,12 @@
 </head>
 <body>
   <main>
-    <h1>qobuz-dl web</h1>
+    <header class="top">
+      <h1>qobuz-dl web</h1>
+      <button type="button" id="web-logout" class="secondary" hidden>Abmelden</button>
+    </header>
+    <p id="auth-warning" class="warning" hidden>Kein Passwort gesetzt: Jeder in deinem Netz kann diese Seite
+      benutzen und dein Qobuz-Konto ändern. Setze <code>WEB_PASSWORD</code> in <code>.env</code>.</p>
     <section class="card" id="account" aria-labelledby="account-title">
       <div class="account-head">
         <h2 id="account-title">Qobuz-Konto</h2>
@@ -17,7 +22,7 @@
           <span id="account-membership" class="muted"></span>
           <div class="actions">
             <button type="button" id="account-change" class="secondary">Ändern</button>
-            <button type="button" id="logout" class="secondary">Abmelden</button>
+            <button type="button" id="logout" class="secondary">Konto entfernen</button>
           </div>
         </div>
       </div>
@@ -109,9 +114,10 @@
     <form method="dialog" class="browser">
       <h3>Speicherort wählen</h3>
       <nav id="crumbs" class="crumbs"></nav>
+      <p id="browser-hint" class="muted small"></p>
       <ul id="dirs" class="dirs"></ul>
       <p id="browser-msg" class="error" hidden></p>
-      <div class="new-folder">
+      <div class="new-folder" id="new-folder-row">
         <input id="new-folder" placeholder="Neuer Ordner" spellcheck="false">
         <button type="button" id="mkdir" class="secondary">Anlegen</button>
       </div>

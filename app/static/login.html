@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Anmelden · qobuz-dl web</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <main class="narrow">
+    <h1>qobuz-dl web</h1>
+    <form id="web-login" class="card login">
+      <input type="text" name="username" value="qobuz-dl" autocomplete="username" hidden>
+      <label class="field">
+        <span>Passwort</span>
+        <input id="password" name="password" type="password" autocomplete="current-password" required autofocus>
+      </label>
+      <button type="submit" id="submit">Anmelden</button>
+      <p id="msg" class="error" hidden></p>
+      <p id="http-hint" class="muted small" hidden>Die Verbindung ist nicht verschlüsselt (HTTP).
+        Für den Zugriff von außerhalb des Heimnetzes HTTPS über einen Reverse-Proxy einrichten (siehe README).</p>
+    </form>
+  </main>
+  <script src="/static/login.js"></script>
+</body>
+</html>

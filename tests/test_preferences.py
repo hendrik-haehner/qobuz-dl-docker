@@ -44,7 +44,7 @@ def test_target_dir_normalized():
 
 
 def _settings(tmp_path, q=6):
-    return Settings(download_dir=tmp_path, config_dir=tmp_path / "cfg", qobuz_dl_bin="x", default_quality=q)
+    return Settings(shares_dir=tmp_path, config_dir=tmp_path / "cfg", qobuz_dl_bin="x", default_quality=q)
 
 
 def test_load_defaults_from_env_quality(tmp_path):

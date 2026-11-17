@@ -27,7 +27,7 @@ def build_config(
     app_id: str,
     secrets: list[str],
     *,
-    download_dir: str,
+    shares_dir: str,
     quality: int,
     folder_format: str,
     track_format: str,
@@ -38,7 +38,7 @@ def build_config(
     d = config["DEFAULT"]
     d["email"] = email
     d["password"] = hashlib.md5(password.encode("utf-8")).hexdigest()
-    d["default_folder"] = download_dir
+    d["default_folder"] = shares_dir
     d["default_quality"] = str(quality)
     d["default_limit"] = "20"
     for flag in (
@@ -117,7 +117,7 @@ def login(settings: Settings, email: str, password: str) -> dict:
                 password,
                 app_id,
                 secrets,
-                download_dir=str(settings.download_dir),
+                shares_dir=str(settings.shares_dir),
                 quality=settings.default_quality if settings.default_quality in VALID_QUALITIES else 6,
                 folder_format=DEFAULT_FOLDER,
                 track_format=DEFAULT_TRACK,

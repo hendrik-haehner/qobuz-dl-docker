@@ -1,14 +1,15 @@
 """Webinterface und REST-API für qobuz-dl."""
 
+import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
 
-from app import preferences, qobuz_config, storage
+from app import auth, preferences, qobuz_config, storage
 from app.jobs import JobManager
 from app.preferences import FOLDER_KEYS, TRACK_KEYS, Preferences
 from app.settings import get_settings
@@ -32,6 +33,10 @@ class Credentials(BaseModel):
     password: str
 
 
+class WebLogin(BaseModel):
+    password: str
+
+
 class NewFolder(BaseModel):
     parent: str = ""
     name: str
@@ -49,6 +54,23 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="qobuz-dl web", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
+# Ohne Anmeldung erreichbar (Healthcheck, Login-Seite und deren Dateien)
+PUBLIC = {"/login", "/api/login", "/api/health", "/static/style.css", "/static/login.js"}
+
+
+def _logged_in(request: Request) -> bool:
+    return auth.valid_token(get_settings().config_dir, request.cookies.get(auth.COOKIE))
+
+
+@app.middleware("http")
+async def require_login(request: Request, call_next):
+    path = request.url.path
+    if not auth.enabled() or path in PUBLIC or _logged_in(request):
+        return await call_next(request)
+    if path.startswith("/api/"):
+        return JSONResponse({"detail": "Nicht angemeldet."}, status_code=401)
+    return RedirectResponse("/login", status_code=303)
+
 
 def _bad_request(exc: Exception) -> HTTPException:
     if isinstance(exc, ValidationError):
@@ -63,6 +85,39 @@ def index():
     return FileResponse(STATIC / "index.html")
 
 
+@app.get("/login", include_in_schema=False)
+def login_page(request: Request):
+    if not auth.enabled() or _logged_in(request):
+        return RedirectResponse("/", status_code=303)
+    return FileResponse(STATIC / "login.html")
+
+
+@app.post("/api/login", status_code=204)
+async def web_login(req: WebLogin, request: Request, response: Response):
+    if not auth.enabled():
+        return
+    try:
+        ok = auth.check_password(req.password)
+    except auth.TooManyAttempts as exc:
+        raise HTTPException(429, "Zu viele Fehlversuche. Bitte in ein paar Minuten erneut.") from exc
+    if not ok:
+        await asyncio.sleep(1)  # bremst Durchprobieren
+        raise HTTPException(401, "Falsches Passwort.")
+    response.set_cookie(
+        auth.COOKIE,
+        auth.create_token(get_settings().config_dir),
+        max_age=auth.SESSION_SECONDS,
+        httponly=True,
+        samesite="strict",
+        secure=request.url.scheme == "https",
+    )
+
+
+@app.post("/api/logout", status_code=204)
+def web_logout(response: Response):
+    response.delete_cookie(auth.COOKIE, httponly=True, samesite="strict")
+
+
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
@@ -73,7 +128,8 @@ def status():
     s = get_settings()
     return {
         **qobuz_config.account(s),
-        "download_dir": str(s.download_dir),
+        "auth_enabled": auth.enabled(),
+        "shares_dir": str(s.shares_dir),
         "placeholders": {
             "folder": sorted(FOLDER_KEYS),
             "track": sorted(TRACK_KEYS),
@@ -115,7 +171,8 @@ def put_preferences(prefs: dict):
     s = get_settings()
     try:
         new = Preferences.model_validate(prefs)
-        storage.resolve(s.download_dir, new.target_dir)
+        if new.target_dir:  # leer = „noch nicht gewählt“
+            storage.check_target(s.shares_dir, new.target_dir)
     except (ValidationError, ValueError) as exc:
         raise _bad_request(exc) from exc
     try:
@@ -131,7 +188,7 @@ def put_preferences(prefs: dict):
 @app.get("/api/folders")
 def get_folders(path: str = ""):
     try:
-        return storage.list_dirs(get_settings().download_dir, path)
+        return storage.list_dirs(get_settings().shares_dir, path)
     except storage.StorageError as exc:
         raise HTTPException(404, str(exc)) from exc
 
@@ -139,7 +196,7 @@ def get_folders(path: str = ""):
 @app.post("/api/folders", status_code=201)
 def create_folder(req: NewFolder):
     try:
-        path = storage.make_dir(get_settings().download_dir, req.parent, req.name)
+        path = storage.make_dir(get_settings().shares_dir, req.parent, req.name)
     except storage.StorageError as exc:
         raise HTTPException(422, str(exc)) from exc
     return {"path": path}
@@ -168,6 +225,8 @@ def create_download(req: DownloadRequest):
     overrides = req.model_dump(exclude={"url"}, exclude_none=True)
     try:
         options = Preferences.model_validate(defaults | overrides)
+        if not options.target_dir:
+            options.target_dir = storage.default_target(settings.shares_dir)
         job = app.state.jobs.submit(req.url, options)
     except (ValidationError, ValueError) as exc:
         raise _bad_request(exc) from exc

@@ -16,7 +16,7 @@ def test_status(env):
     with TestClient(app) as client:
         s = client.get("/api/status").json()
         assert s["configured"] is False
-        assert s["download_dir"] == str(env["music"])
+        assert s["shares_dir"] == str(env["music"])
         assert "tracktitle" in s["placeholders"]["track"]
 
 
@@ -32,10 +32,11 @@ def test_reject_bad_url(configured):
 
 
 def test_settings_roundtrip(env):
-    (env["music"] / "Hi-Res").mkdir()
+    (env["music"] / "music" / "Hi-Res").mkdir(parents=True)
     with TestClient(app) as client:
         assert client.get("/api/settings").json()["format"] == "flac"
-        new = {"format": "flac", "quality": 27, "target_dir": "Hi-Res",
+        assert client.put("/api/settings", json={"target_dir": "Video"}).status_code == 422
+        new = {"format": "flac", "quality": 27, "target_dir": "music/Hi-Res",
                "folder_format": "{artist}/{album} ({year})", "track_format": "{tracknumber}. {tracktitle}"}
         assert client.put("/api/settings", json=new).json() == new
         assert client.get("/api/settings").json() == new
@@ -52,24 +53,32 @@ def test_settings_rejects_invalid(env):
 
 
 def test_folders_browse_and_create(env):
+    (env["music"] / "music").mkdir()
     with TestClient(app) as client:
-        assert client.get("/api/folders").json()["dirs"] == []
-        res = client.post("/api/folders", json={"parent": "", "name": "Klassik"})
-        assert res.status_code == 201 and res.json() == {"path": "Klassik"}
-        assert client.get("/api/folders").json()["dirs"] == ["Klassik"]
+        root = client.get("/api/folders").json()
+        assert root["is_root"] and root["dirs"] == ["music"]
+        # Freigaben entstehen nur über docker-compose, nicht im Webinterface
+        assert client.post("/api/folders", json={"parent": "", "name": "Klassik"}).status_code == 422
+        res = client.post("/api/folders", json={"parent": "music", "name": "Klassik"})
+        assert res.status_code == 201 and res.json() == {"path": "music/Klassik"}
+        assert client.get("/api/folders", params={"path": "music"}).json()["dirs"] == ["Klassik"]
         assert client.get("/api/folders", params={"path": ".."}).status_code == 404
-        assert client.post("/api/folders", json={"name": "../x"}).status_code == 422
+        assert client.post("/api/folders", json={"parent": "music", "name": "../x"}).status_code == 422
 
 
 def test_download_uses_saved_defaults_and_overrides(configured, monkeypatch):
     monkeypatch.setenv("QOBUZ_DL_BIN", write_fake_bin(configured["home"].parent))
+    (configured["music"] / "music").mkdir()
+    (configured["music"] / "Downloads").mkdir()
     with TestClient(app) as client:
-        client.put("/api/settings", json={"format": "mp3", "target_dir": "MP3"})
+        assert client.put("/api/settings", json={"format": "mp3", "target_dir": "music/MP3"}).status_code == 200
         job = client.post("/api/downloads", json={"url": URL}).json()
-        assert (job["format"], job["target_dir"]) == ("mp3", "MP3")
+        assert (job["format"], job["target_dir"]) == ("mp3", "music/MP3")
         job2 = client.post("/api/downloads", json={"url": URL, "format": "flac", "quality": 7,
-                                                   "target_dir": "Hi-Res"}).json()
-        assert (job2["format"], job2["quality"], job2["target_dir"]) == ("flac", 7, "Hi-Res")
+                                                   "target_dir": "Downloads/Hi-Res"}).json()
+        assert (job2["format"], job2["quality"], job2["target_dir"]) == ("flac", 7, "Downloads/Hi-Res")
+        # direkt in /shares oder in eine nicht eingebundene Freigabe: abgelehnt
+        assert client.post("/api/downloads", json={"url": URL, "target_dir": "Video"}).status_code == 422
         assert client.post("/api/downloads", json={"url": URL, "quality": 9}).status_code == 422
         assert client.get(f"/api/downloads/{job['id']}").status_code == 200
         assert client.get("/api/downloads/nope").status_code == 404
@@ -110,3 +119,12 @@ def test_account_flow(env, monkeypatch):
         assert client.delete("/api/account").status_code == 204
         assert client.get("/api/account").json()["configured"] is False
         assert client.post("/api/downloads", json={"url": URL}).status_code == 409
+
+
+def test_download_without_target_uses_single_share(configured, monkeypatch):
+    monkeypatch.setenv("QOBUZ_DL_BIN", write_fake_bin(configured["home"].parent))
+    with TestClient(app) as client:
+        res = client.post("/api/downloads", json={"url": URL})
+        assert res.status_code == 422 and "Freigabe wählen" in res.json()["detail"]
+        (configured["music"] / "music").mkdir()
+        assert client.post("/api/downloads", json={"url": URL}).json()["target_dir"] == "music"

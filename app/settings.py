@@ -12,8 +12,8 @@ def _default_config_dir() -> Path:
 
 @dataclass(frozen=True)
 class Settings:
-    download_dir: Path = field(
-        default_factory=lambda: Path(os.environ.get("DOWNLOAD_DIR", "/downloads"))
+    shares_dir: Path = field(
+        default_factory=lambda: Path(os.environ.get("SHARES_DIR", "/shares"))
     )
     config_dir: Path = field(default_factory=_default_config_dir)
     qobuz_dl_bin: str = field(

@@ -32,7 +32,7 @@ def fake_qobuz(monkeypatch):
 def test_build_config_matches_qobuz_dl_keys():
     cfg = qobuz_config.build_config(
         "a@b.c", "geheim", "123456789", ["s1", "s2"],
-        download_dir="/downloads", quality=27, folder_format="F", track_format="T",
+        shares_dir="/downloads", quality=27, folder_format="F", track_format="T",
     )
     d = cfg["DEFAULT"]
     assert d["password"] == hashlib.md5(b"geheim").hexdigest()
@@ -47,7 +47,7 @@ def test_build_config_matches_qobuz_dl_keys():
 
 def test_build_config_rejects_quality():
     with pytest.raises(ValueError):
-        qobuz_config.build_config("a", "b", "1", [], download_dir="/d", quality=3,
+        qobuz_config.build_config("a", "b", "1", [], shares_dir="/d", quality=3,
                                   folder_format="F", track_format="T")
 
 

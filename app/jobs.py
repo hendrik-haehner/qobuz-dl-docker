@@ -10,7 +10,7 @@ from enum import Enum
 
 from app.preferences import Preferences, qobuz_quality
 from app.settings import Settings
-from app.storage import resolve
+from app.storage import check_target, resolve
 
 ALLOWED_URL = re.compile(
     r"^https://(open|play|www)\.qobuz\.com/\S+$|^https://(www\.)?last\.fm/\S+$"
@@ -68,7 +68,7 @@ def build_command(settings: Settings, job: Job) -> list[str]:
         "-q",
         str(qobuz_quality(o.format, o.quality)),
         "-d",
-        str(resolve(settings.download_dir, o.target_dir)),
+        str(resolve(settings.shares_dir, o.target_dir)),
         "-ff",
         o.folder_format,
         "-tf",
@@ -99,7 +99,7 @@ class JobManager:
     def submit(self, url: str, options: Preferences) -> Job:
         url = url.strip()
         validate(url)
-        resolve(self.settings.download_dir, options.target_dir)  # wirft bei Ausbruch
+        check_target(self.settings.shares_dir, options.target_dir)
         job = Job(url=url, options=options)
         self.jobs[job.id] = job
         self._queue.put_nowait(job)
@@ -119,7 +119,7 @@ class JobManager:
     async def run(self, job: Job) -> None:
         job.status = JobStatus.running
         try:
-            resolve(self.settings.download_dir, job.options.target_dir).mkdir(
+            resolve(self.settings.shares_dir, job.options.target_dir).mkdir(
                 parents=True, exist_ok=True
             )
             proc = await asyncio.create_subprocess_exec(
