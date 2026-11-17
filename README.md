@@ -5,8 +5,8 @@ Docker-App mit Webinterface für das Terminalprogramm
 ein, der Container lädt sie mit `qobuz-dl dl` auf dein NAS und zeigt die Ausgabe live an.
 
 - **Zugangsschutz** per Passwort (`WEB_PASSWORD`)
-- **Qobuz-Konto** im Webinterface hinterlegen (E-Mail oder Benutzername + Passwort),
-  direkt bei Qobuz geprüft
+- **Qobuz-Konto** im Webinterface hinterlegen (Token aus dem Browser, siehe
+  „Qobuz-Anmeldung“), direkt bei Qobuz geprüft
 - **Speicherort:** NAS-Freigabe und Unterordner wählen, neue Ordner anlegen
 - **Format** FLAC oder MP3 320, **Qualität** CD 16/44,1 · Hi-Res 24/96 · Hi-Res 24/192
   (fehlt ein Album in der Qualität, nimmt qobuz-dl die nächstbeste)
@@ -75,8 +75,7 @@ $DC pull && $DC up -d && docker image prune -f
   erscheint im Container Manager unter **Container**.
 
 Danach `http://<IP-des-NAS>:8080` öffnen (bzw. dein `WEB_PORT`), mit `WEB_PASSWORD`
-anmelden und unter „Qobuz-Konto“ die Qobuz-Zugangsdaten eingeben. Eine funktionierende
-`config.ini` von qobuz-dl kannst du stattdessen auch nach `config/` kopieren.
+anmelden und unter „Qobuz-Konto“ den Qobuz-Token eintragen (siehe „Qobuz-Anmeldung“).
 
 **Umstieg von der Installation mit Quellcode:** In deiner `docker-compose.yml` die
 Zeilen `build: .` und `image: qobuz-dl-web:latest` durch
@@ -96,6 +95,32 @@ id deinbenutzername > /volume1/docker/id.txt
 Ausführen und `docker/id.txt` öffnen: `uid=1026(…) gid=100(users)` heißt `PUID=1026`,
 `PGID=100`. Im Webinterface zeigt der Dialog „Ordner wählen“ außerdem, mit welcher
 ID der Container tatsächlich zugreift.
+
+## Qobuz-Anmeldung
+
+Seit April 2026 nimmt Qobuz an seiner API keine Anmeldung mit E-Mail und Passwort mehr
+an (der Web-Player nutzt OAuth mit reCAPTCHA). qobuz-dl selbst wird nicht mehr gepflegt
+([vitiko98/qobuz-dl#329](https://github.com/vitiko98/qobuz-dl/issues/329)). Die App meldet
+sich darum mit dem `user_auth_token` einer angemeldeten Browser-Sitzung an:
+
+1. [play.qobuz.com](https://play.qobuz.com) im Browser öffnen und anmelden.
+2. Entwicklerwerkzeuge öffnen (Chrome/Firefox am Mac: `Cmd`+`Option`+`I`; Safari: erst
+   Einstellungen → Erweitert → „Funktionen für Webentwickler anzeigen“).
+3. Reiter **Netzwerk**, nach `login` filtern, Seite neu laden.
+4. Eintrag `login` → **Antwort** → Wert von `user_auth_token` kopieren.
+   Kein solcher Eintrag: einen Titel abspielen, nach `api.json` filtern und bei einer
+   Anfrage unter **Header** den Wert von `X-User-Auth-Token` kopieren.
+5. Im Webinterface unter „Qobuz-Konto“ einfügen.
+
+Der Token gibt vollen Zugriff auf das Qobuz-Konto. Er liegt nur in `config/config.ini`
+(Rechte 0600) und wird von keiner API ausgegeben. Bei jedem Download holt die App bei
+Qobuz einen frischen Token und speichert ihn; läuft er trotzdem ab, zeigt die
+Download-Liste das an, und du trägst einen neuen ein.
+
+Technisch: qobuz-dl läuft unverändert, nur seine Login-Funktion wird ersetzt
+(`app/token_auth.py`): `POST user/login` mit `extra=partner` und dem Token im Header
+`X-User-Auth-Token`. Eine alte `config.ini` mit Passwort-Hash zeigt das Webinterface
+mit einem Hinweis an.
 
 ## Freigaben einbinden
 
@@ -166,9 +191,9 @@ sicherer, als die Seite ins Internet freizugeben.
 | `WEB_PORT` | `8080` | Port auf dem NAS |
 | `WEB_BIND` | `0.0.0.0` | `127.0.0.1`: nur über Reverse-Proxy erreichbar |
 | `QOBUZ_DEFAULT_QUALITY` | `6` | Startwert, bis im Webinterface ein Standard gespeichert wird: `5` MP3 320, `6` FLAC 16/44,1, `7` FLAC 24/96, `27` FLAC 24/192 |
-| `QOBUZ_EMAIL`, `QOBUZ_PASSWORD` | – | optional, statt Anmeldung im Webinterface |
+| `QOBUZ_TOKEN` | – | optional, statt den Qobuz-Token im Webinterface einzutragen |
 
-Im Ordner `config/` liegen `config.ini` (Qobuz-Anmeldung, nur Passwort-Hash),
+Im Ordner `config/` liegen `config.ini` (Qobuz-Anmeldung mit Token, Rechte 0600),
 `web-settings.json` (Standards aus dem Webinterface), `session.key` (signiert die
 Sitzungen) und die Download-Datenbank von qobuz-dl.
 
@@ -178,7 +203,9 @@ Sitzungen) und die Download-Datenbank von qobuz-dl.
 app/
   main.py          FastAPI: Webinterface + REST-API, Zugangsschutz (Middleware)
   auth.py          Passwort, signierte Sitzungen, Schutz gegen Durchprobieren
-  qobuz_config.py  Qobuz-Anmeldung: prüft Zugangsdaten, schreibt config.ini
+  qobuz_config.py  Qobuz-Anmeldung: prüft den Token, schreibt config.ini
+  token_auth.py    Token-Anmeldung statt E-Mail/Passwort (ersetzt den Login von qobuz-dl)
+  qdl_runner.py    startet qobuz-dl mit Token-Anmeldung, speichert den erneuerten Token
   jobs.py          Warteschlange, startet qobuz-dl als Subprozess (ein Job nach dem anderen)
   preferences.py   Format, Qualität, Speicherort, Namensmuster (+ Prüfung der Platzhalter)
   storage.py       Freigaben unter /shares: auflisten, Mount prüfen, Ordner anlegen
@@ -198,9 +225,9 @@ Sitzung (sonst `401`).
 | `GET` | `/api/health` | Healthcheck |
 | `POST` | `/api/login` / `/api/logout` | `{"password": "..."}` → Session-Cookie |
 | `GET` | `/api/status` | Qobuz angemeldet? Zugangsschutz aktiv? Platzhalter |
-| `GET` | `/api/account` | `{"configured": true, "email": "..."}` |
-| `PUT` | `/api/account` | `{"email": "...", "password": "..."}` prüft bei Qobuz und speichert |
-| `DELETE` | `/api/account` | löscht die Qobuz-Zugangsdaten |
+| `GET` | `/api/account` | `{"configured": true, "email": "...", "auth_method": "token"}` |
+| `PUT` | `/api/account` | `{"token": "..."}` prüft bei Qobuz und speichert |
+| `DELETE` | `/api/account` | löscht die Qobuz-Anmeldung |
 | `GET`/`PUT` | `/api/settings` | Standards: `format`, `quality`, `target_dir`, `folder_format`, `track_format` |
 | `GET` | `/api/folders?path=music/Rock` | Freigaben (ohne `path`) bzw. Unterordner |
 | `POST` | `/api/folders` | `{"parent": "music", "name": "Hi-Res"}` legt einen Ordner an |

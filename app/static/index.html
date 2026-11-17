@@ -26,17 +26,37 @@
           </div>
         </div>
       </div>
+      <p id="legacy-warning" class="warning" hidden>Diese Anmeldung nutzt noch E-Mail und Passwort.
+        Das akzeptiert Qobuz seit April 2026 nicht mehr, Downloads schlagen damit fehl.
+        Bitte unter „Ändern“ einen Token eintragen.</p>
       <form id="login-form" class="login" hidden>
         <label class="field">
-          <span>E-Mail oder Benutzername</span>
-          <input id="login-email" name="username" autocomplete="username" required spellcheck="false">
+          <span>Qobuz-Token (<code>user_auth_token</code>)</span>
+          <input id="login-token" name="token" type="password" autocomplete="off" required spellcheck="false"
+            placeholder="aus dem Browser kopieren">
         </label>
-        <label class="field">
-          <span>Passwort</span>
-          <input id="login-password" name="password" type="password" autocomplete="current-password" required>
-        </label>
-        <p class="muted small">Die Anmeldung wird direkt bei Qobuz geprüft. Gespeichert wird,
-          wie bei qobuz-dl, nur ein Hash des Passworts.</p>
+        <details class="howto">
+          <summary>So findest du den Token</summary>
+          <ol>
+            <li>Im Browser <a href="https://play.qobuz.com" target="_blank" rel="noopener">play.qobuz.com</a>
+              öffnen und anmelden.</li>
+            <li>Entwicklerwerkzeuge öffnen: Chrome/Firefox <kbd>Cmd</kbd>+<kbd>Option</kbd>+<kbd>I</kbd>.
+              Safari: zuerst Einstellungen → Erweitert → „Funktionen für Webentwickler anzeigen“,
+              dann <kbd>Cmd</kbd>+<kbd>Option</kbd>+<kbd>I</kbd>.</li>
+            <li>Reiter <strong>Netzwerk</strong>, ins Filterfeld <code>login</code> tippen und die Seite
+              neu laden.</li>
+            <li>Den Eintrag <code>login</code> anklicken → <strong>Antwort</strong> → den Wert von
+              <code>user_auth_token</code> kopieren (ohne Anführungszeichen).</li>
+          </ol>
+          <p class="muted small">Kein <code>login</code>-Eintrag? Einen Titel abspielen, nach
+            <code>api.json</code> filtern und bei einer Anfrage unter <strong>Header</strong> den Wert von
+            <code>X-User-Auth-Token</code> kopieren.</p>
+          <p class="muted small">Der Token gibt vollen Zugriff auf dein Qobuz-Konto. Gib ihn nur hier ein.
+            Er wird nur im Ordner <code>config</code> auf dem NAS gespeichert und bei jedem Download
+            automatisch erneuert. Wenn er doch abläuft, trägst du einfach einen neuen ein.</p>
+        </details>
+        <p class="muted small">Warum kein Passwort? Qobuz nimmt seit April 2026 keine Anmeldung mit
+          E-Mail und Passwort mehr an.</p>
         <div class="actions">
           <button type="submit" id="login-submit">Anmelden</button>
           <button type="button" id="login-cancel" class="secondary" hidden>Abbrechen</button>

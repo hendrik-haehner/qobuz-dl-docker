@@ -16,9 +16,9 @@ class Settings:
         default_factory=lambda: Path(os.environ.get("SHARES_DIR", "/shares"))
     )
     config_dir: Path = field(default_factory=_default_config_dir)
-    qobuz_dl_bin: str = field(
-        default_factory=lambda: os.environ.get("QOBUZ_DL_BIN", "qobuz-dl")
-    )
+    # Leer: qobuz-dl über app.qdl_runner starten (Token-Anmeldung).
+    # Nur für Tests/Entwicklung auf ein anderes Programm umstellen.
+    qobuz_dl_bin: str = field(default_factory=lambda: os.environ.get("QOBUZ_DL_BIN", ""))
     default_quality: int = field(
         default_factory=lambda: int(os.environ.get("QOBUZ_DEFAULT_QUALITY", "6"))
     )

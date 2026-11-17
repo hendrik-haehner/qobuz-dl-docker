@@ -1,14 +1,13 @@
 """Qobuz-Anmeldung: erzeugt die qobuz-dl-Konfiguration ohne interaktive Eingabe.
 
-qobuz-dl fragt beim ersten Start per input() nach E-Mail und Passwort. Im
-Container geht das nicht, darum bauen wir dieselbe config.ini hier nach
-(siehe qobuz_dl/cli.py: _reset_config), aus dem Webinterface oder beim Start
-aus QOBUZ_EMAIL/QOBUZ_PASSWORD (python -m app.qobuz_config).
-Gespeichert wird wie bei qobuz-dl nur der MD5-Hash des Passworts.
+Qobuz nimmt seit April 2026 keine Anmeldung mit E-Mail/Passwort mehr an. Die
+App meldet sich darum mit dem `user_auth_token` aus einer Browser-Sitzung an
+(siehe app/token_auth.py). config.ini hat dasselbe Format wie bei qobuz-dl,
+nur steht im Feld `password` der Token und zusätzlich `auth_method = token`.
+Beim Start kann der Token auch aus QOBUZ_TOKEN kommen (python -m app.qobuz_config).
 """
 
 import configparser
-import hashlib
 import logging
 import os
 import sys
@@ -23,7 +22,7 @@ VALID_QUALITIES = (5, 6, 7, 27)
 
 def build_config(
     email: str,
-    password: str,
+    token: str,
     app_id: str,
     secrets: list[str],
     *,
@@ -37,7 +36,8 @@ def build_config(
     config = configparser.ConfigParser()
     d = config["DEFAULT"]
     d["email"] = email
-    d["password"] = hashlib.md5(password.encode("utf-8")).hexdigest()
+    d["password"] = token  # Token, kein Passwort-Hash (siehe app/token_auth.py)
+    d["auth_method"] = "token"
     d["default_folder"] = shares_dir
     d["default_quality"] = str(quality)
     d["default_limit"] = "20"
@@ -67,14 +67,21 @@ _login_lock = threading.Lock()
 
 
 def account(settings: Settings) -> dict:
-    """Wer ist angemeldet? Gibt nie das Passwort (bzw. dessen Hash) heraus."""
+    """Wer ist angemeldet? Gibt nie Token oder Passwort-Hash heraus."""
     config = configparser.ConfigParser()
     try:
         config.read(settings.config_file)
         email = config["DEFAULT"].get("email") or None
+        method = config["DEFAULT"].get("auth_method", "password")
     except (configparser.Error, OSError):
-        email = None
-    return {"configured": settings.config_file.is_file(), "email": email}
+        email, method = None, "password"
+    configured = settings.config_file.is_file()
+    return {
+        "configured": configured,
+        "email": email,
+        # "password": alte Anmeldung (z. B. kopierte config.ini), lehnt Qobuz inzwischen ab
+        "auth_method": method if configured else None,
+    }
 
 
 def _fetch_tokens() -> tuple[str, list[str]]:
@@ -86,48 +93,37 @@ def _fetch_tokens() -> tuple[str, list[str]]:
     return str(bundle.get_app_id()), secrets
 
 
-def _verify(email: str, password_md5: str, app_id: str, secrets: list[str]) -> str:
-    """Meldet sich wie qobuz-dl an. Gibt die Abo-Stufe zurück."""
-    from qobuz_dl.qopy import Client
+def _verify(token: str, app_id: str, secrets: list[str]) -> dict:
+    """Meldet sich wie ein Download mit dem Token an; gibt Kontodaten und frischen Token."""
+    from app import token_auth
 
-    client = Client(email, password_md5, app_id, secrets)
-    return getattr(client, "label", "")
+    return token_auth.login(token, app_id, secrets)
 
 
-def login(settings: Settings, email: str, password: str) -> dict:
-    """Zugangsdaten bei Qobuz prüfen und erst dann in config.ini schreiben."""
+def login(settings: Settings, token: str) -> dict:
+    """Token bei Qobuz prüfen und erst dann in config.ini schreiben."""
     import requests
     from qobuz_dl.downloader import DEFAULT_FOLDER, DEFAULT_TRACK
     from qobuz_dl.exceptions import (
         AuthenticationError,
-        IneligibleError,
         InvalidAppIdError,
         InvalidAppSecretError,
     )
 
-    email = email.strip()
-    if not email or not password:
-        raise LoginError("E-Mail/Benutzername und Passwort angeben.")
+    from app.token_auth import TokenError
+
+    token = token.strip()
+    if not token:
+        raise LoginError("Bitte den Token aus dem Browser einfügen.")
 
     with _login_lock:
         try:
             app_id, secrets = _fetch_tokens()
-            config = build_config(
-                email,
-                password,
-                app_id,
-                secrets,
-                shares_dir=str(settings.shares_dir),
-                quality=settings.default_quality if settings.default_quality in VALID_QUALITIES else 6,
-                folder_format=DEFAULT_FOLDER,
-                track_format=DEFAULT_TRACK,
-            )
-            membership = _verify(email, config["DEFAULT"]["password"], app_id, secrets)
-        except AuthenticationError as exc:
-            raise LoginError("E-Mail/Benutzername oder Passwort ist falsch.") from exc
-        except IneligibleError as exc:
+            info = _verify(token, app_id, secrets)
+        except (TokenError, AuthenticationError) as exc:
             raise LoginError(
-                "Dieses Qobuz-Konto darf nicht herunterladen (kostenloses Konto?)."
+                "Qobuz hat den Token abgelehnt: ungültig oder abgelaufen. "
+                "Hol dir einen neuen aus dem Browser (Anleitung unter dem Feld)."
             ) from exc
         except (InvalidAppIdError, InvalidAppSecretError, NotImplementedError) as exc:
             raise LoginError(
@@ -136,13 +132,28 @@ def login(settings: Settings, email: str, password: str) -> dict:
         except requests.RequestException as exc:
             raise LoginError(f"Qobuz ist nicht erreichbar: {exc.__class__.__name__}") from exc
 
+        if not info["can_download"]:
+            raise LoginError(
+                "Angemeldet, aber Qobuz meldet für dieses Konto kein Download-Abo "
+                f"({info['label'] or 'unbekannt'})."
+            )
+        config = build_config(
+            info["email"],
+            info["token"],  # frischer Token aus der Anmeldung
+            app_id,
+            secrets,
+            shares_dir=str(settings.shares_dir),
+            quality=settings.default_quality if settings.default_quality in VALID_QUALITIES else 6,
+            folder_format=DEFAULT_FOLDER,
+            track_format=DEFAULT_TRACK,
+        )
         settings.config_dir.mkdir(parents=True, exist_ok=True)
         tmp = settings.config_file.with_suffix(".tmp")
         with open(os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w") as fh:
             config.write(fh)
         os.replace(tmp, settings.config_file)
-    log.info("Angemeldet als %s (%s)", email, membership or "Abo unbekannt")
-    return {**account(settings), "membership": membership}
+    log.info("Angemeldet als %s (%s)", info["email"] or "?", info["label"] or "Abo unbekannt")
+    return {**account(settings), "membership": info["label"]}
 
 
 def logout(settings: Settings) -> None:
@@ -151,21 +162,20 @@ def logout(settings: Settings) -> None:
 
 
 def ensure_config() -> bool:
-    """Beim Containerstart: config.ini aus QOBUZ_EMAIL/QOBUZ_PASSWORD anlegen, falls sie fehlt."""
+    """Beim Containerstart: config.ini aus QOBUZ_TOKEN anlegen, falls sie fehlt."""
     settings = get_settings()
     if settings.config_file.is_file():
         log.info("Konfiguration vorhanden: %s", settings.config_file)
         return True
 
-    email = os.environ.get("QOBUZ_EMAIL", "").strip()
-    password = os.environ.get("QOBUZ_PASSWORD", "")
-    if not email or not password:
+    token = os.environ.get("QOBUZ_TOKEN", "").strip()
+    if not token:
         log.info("Noch kein Qobuz-Konto hinterlegt. Anmeldung im Webinterface möglich.")
         return False
     try:
-        login(settings, email, password)
+        login(settings, token)
     except LoginError as exc:
-        log.error("Anmeldung mit QOBUZ_EMAIL/QOBUZ_PASSWORD fehlgeschlagen: %s", exc)
+        log.error("Anmeldung mit QOBUZ_TOKEN fehlgeschlagen: %s", exc)
         return False
     return True
 
