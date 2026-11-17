@@ -71,7 +71,8 @@ def shares(root: Path) -> list[dict]:
             result.append({
                 "name": entry.name,
                 "mounted": is_mounted(path),
-                "writable": os.access(path, os.W_OK),
+                "readable": os.access(path, os.R_OK | os.X_OK),
+                "writable": os.access(path, os.W_OK | os.X_OK),
             })
     return result
 
@@ -115,6 +116,9 @@ def list_dirs(root: Path, rel: str) -> dict:
             "dirs": [s["name"] for s in share_list],
             "shares": share_list,
             "writable": False,
+            # Mit dieser ID greift der Container zu (PUID/PGID aus .env)
+            "uid": os.getuid(),
+            "gid": os.getgid(),
         }
     try:
         names = sorted(
@@ -122,7 +126,11 @@ def list_dirs(root: Path, rel: str) -> dict:
             key=str.casefold,
         )
     except PermissionError as exc:
-        raise StorageError("Keine Leserechte für diesen Ordner.") from exc
+        raise StorageError(
+            f"Kein Zugriff: Der Container (Benutzer {os.getuid()}:{os.getgid()}) darf "
+            f"„{rel_real}“ nicht lesen. Rechte der Freigabe für diesen Benutzer oder "
+            "PUID/PGID in .env prüfen."
+        ) from exc
     share_path = _root(root) / rel_real.split("/")[0]
     return {
         "path": rel_real,

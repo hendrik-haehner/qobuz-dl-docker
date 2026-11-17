@@ -111,3 +111,18 @@ def test_default_target(root, tmp_path):
     single = tmp_path / "single"
     (single / "music").mkdir(parents=True)
     assert storage.default_target(single) == "music"
+
+
+def test_permission_error_names_container_user(root, monkeypatch):
+    def denied(path):
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(storage.os, "scandir", denied)
+    with pytest.raises(StorageError, match=r"Kein Zugriff: Der Container \(Benutzer \d+:\d+\)"):
+        storage.list_dirs(root, "music")
+
+
+def test_root_reports_access_and_container_user(root):
+    data = storage.list_dirs(root, "")
+    assert (data["uid"], data["gid"]) == (os.getuid(), os.getgid())
+    assert all(s["readable"] for s in data["shares"])

@@ -172,7 +172,9 @@ function emptyItem(text) {
   return Object.assign(document.createElement("li"), { className: "muted empty", textContent: text });
 }
 
-async function browse(path) {
+// fallback: beim Öffnen des Dialogs auf die Freigabenliste ausweichen, wenn der
+// gespeicherte Ordner nicht mehr existiert. Bei Klicks die Fehlermeldung zeigen.
+async function browse(path, fallback = false) {
   const msg = $("browser-msg");
   msg.hidden = true;
   try {
@@ -181,12 +183,14 @@ async function browse(path) {
     renderCrumbs();
     const list = $("dirs");
     if (data.is_root) {
-      $("browser-hint").textContent = "Wähle eine Freigabe. Neue Freigaben bindest du in docker-compose.yml ein.";
-      list.replaceChildren(...data.shares.map((s) => dirButton(
-        s.name,
-        !s.mounted ? "nicht vom NAS eingebunden" : !s.writable ? "nur lesbar" : "",
-        !s.mounted || !s.writable,
-      )));
+      $("browser-hint").textContent = "Wähle eine Freigabe. Neue Freigaben bindest du in docker-compose.yml ein. "
+        + `Der Container greift als Benutzer ${data.uid}:${data.gid} zu (PUID:PGID).`;
+      list.replaceChildren(...data.shares.map((s) => {
+        const note = !s.mounted ? "nicht vom NAS eingebunden"
+          : !s.readable ? "kein Zugriff"
+          : !s.writable ? "nur lesbar" : "";
+        return dirButton(s.name, note, Boolean(note));
+      }));
       if (!data.shares.length) list.append(emptyItem("Keine Freigaben eingebunden. Siehe README: „Freigaben einbinden“."));
     } else {
       $("browser-hint").textContent = "";
@@ -203,7 +207,7 @@ async function browse(path) {
     $("choose").disabled = data.is_root || !data.mounted;
     $("new-folder-row").hidden = data.is_root;
   } catch (e) {
-    if (path) return browse("");
+    if (path && fallback) return browse("");
     msg.textContent = e.message;
     msg.hidden = false;
   }
@@ -225,7 +229,7 @@ function renderCrumbs() {
 }
 
 $("browse").onclick = () => {
-  browse(target);
+  browse(target, true);
   $("browser").showModal();
 };
 $("choose").onclick = () => {
