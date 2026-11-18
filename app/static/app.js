@@ -102,17 +102,25 @@ function accountMsg(text, ok) {
   el.hidden = !text;
 }
 
+function setAccountCompact(compact) {
+  $("account").classList.toggle("compact", compact);
+  $("account-title").hidden = compact;
+}
+
 function renderAccount(a, membership = "") {
   account = a;
   $("account-info").hidden = !a.configured;
   $("login-form").hidden = a.configured;
   $("login-cancel").hidden = true;
+  setAccountCompact(a.configured);
   $("account-email").textContent = a.email || "unbekannt";
-  $("account-membership").textContent = membership ? `(${membership})` : "";
+  $("account-email").title = a.email || "";
+  $("account-membership").textContent = membership || "";
   $("legacy-warning").hidden = !(a.configured && a.auth_method === "password");
 }
 
 $("account-change").onclick = () => {
+  setAccountCompact(false);
   $("login-form").hidden = false;
   $("login-cancel").hidden = false;
   $("account-info").hidden = true;
@@ -338,9 +346,20 @@ function renderJob(job) {
   return li;
 }
 
+function jobsCountText(jobs) {
+  if (!jobs.length) return "";
+  const n = (st) => jobs.filter((j) => j.status === st).length;
+  const parts = [String(jobs.length)];
+  if (n("running")) parts.push(`${n("running")} läuft`);
+  if (n("queued")) parts.push(`${n("queued")} wartet`);
+  if (n("failed")) parts.push(`${n("failed")} Fehler`);
+  return parts.join(" · ");
+}
+
 async function loadJobs() {
   const jobs = await api("/api/downloads");
   const list = $("jobs");
+  $("jobs-count").textContent = jobsCountText(jobs);
   if (!jobs.length) return;
   const open = new Set([...list.querySelectorAll("details[open]")].map((d) => d.closest("li").dataset.id));
   list.replaceChildren(...jobs.map((j) => {

@@ -100,9 +100,14 @@ details#naming .field { margin-bottom: 10px; }
 #account { margin-top: 12px; }
 #account h2 { margin: 0; font-size: 18px; }
 .account-head { display: grid; gap: 8px; }
-.account-info { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
-.account-info strong { overflow-wrap: anywhere; }
-.account-info .actions { margin-left: auto; }
+/* Angemeldet: eine Zeile, lange Adressen werden mit … gekürzt */
+#account.compact { padding: 8px 12px; gap: 8px; }
+.account-info { display: flex; gap: 8px; align-items: center; min-width: 0; }
+.acc-label { font-weight: 600; flex: none; }
+.acc-email { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#account-membership { flex: none; }
+#account-membership:empty { display: none; }
+button.mini { padding: 4px 10px; font-size: 14px; flex: none; }
 .login { display: grid; gap: 12px; }
 .howto { border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; }
 .howto summary { color: var(--accent); }
@@ -162,3 +167,10 @@ ul { list-style: none; padding: 0; }
 .check small { display: block; margin-top: 2px; }
 summary { color: var(--muted); cursor: pointer; overflow-wrap: anywhere; }
 pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; max-height: 300px; overflow: auto; }
+
+/* Download-Liste zum Aufklappen */
+.downloads > summary { cursor: pointer; list-style: none; display: flex; align-items: baseline; gap: 8px; margin: 20px 0 8px; color: var(--fg); }
+.downloads > summary::-webkit-details-marker { display: none; }
+.downloads > summary::before { content: "▸"; color: var(--muted); width: 1em; }
+.downloads[open] > summary::before { content: "▾"; }
+.downloads > summary h2 { margin: 0; font-size: 20px; }

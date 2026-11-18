@@ -25,13 +25,13 @@
     <section class="card" id="account" aria-labelledby="account-title">
       <div class="account-head">
         <h2 id="account-title">Qobuz-Konto</h2>
+        <!-- Angemeldet: eine kompakte Zeile -->
         <div id="account-info" class="account-info" hidden>
-          <span>Angemeldet als <strong id="account-email"></strong></span>
-          <span id="account-membership" class="muted"></span>
-          <div class="actions">
-            <button type="button" id="account-change" class="secondary">Ändern</button>
-            <button type="button" id="logout" class="secondary">Konto entfernen</button>
-          </div>
+          <span class="acc-label">Qobuz</span>
+          <span class="acc-email" id="account-email" title=""></span>
+          <span id="account-membership" class="muted small"></span>
+          <button type="button" id="account-change" class="secondary mini">Ändern</button>
+          <button type="button" id="logout" class="secondary mini" title="Qobuz-Konto aus dem Container entfernen">Entfernen</button>
         </div>
       </div>
       <p id="legacy-warning" class="warning" hidden>Diese Anmeldung nutzt noch E-Mail und Passwort.
@@ -142,8 +142,11 @@
       <p id="form-msg" hidden></p>
     </form>
 
-    <h2>Downloads</h2>
-    <ul id="jobs"><li class="muted empty">Noch keine Downloads.</li></ul>
+    <!-- Standardmäßig zugeklappt; die Kopfzeile zeigt Anzahl und Status -->
+    <details id="downloads" class="downloads">
+      <summary><h2>Downloads</h2> <span id="jobs-count" class="muted"></span></summary>
+      <ul id="jobs"><li class="muted empty">Noch keine Downloads.</li></ul>
+    </details>
   </main>
 
   <dialog id="browser">
