@@ -2,6 +2,7 @@
 
 import asyncio
 import codecs
+import json
 import re
 import sys
 import uuid
@@ -33,6 +34,16 @@ RELEASE_IN_DB = re.compile(r"was already downloaded according to the local datab
 UNAVAILABLE = re.compile(r"Track not available for download")
 # Anmeldung abgelehnt: Token abgelaufen bzw. alte Passwort-Anmeldung
 AUTH_FAILED = re.compile(r"Qobuz-Token ungültig oder abgelaufen|Invalid credentials")
+# Name für die Download-Liste: Playlist/Interpret/Label meldet qobuz-dl selbst,
+# Alben und Einzeltitel meldet app/qdl_patches.py (MARKER + JSON)
+COLLECTION = re.compile(r"Downloading all the music from (?P<name>.+) \((?P<kind>playlist|artist|label)\)!$")
+URL_KIND = re.compile(r"/(album|playlist|track|artist|label)/")
+NAME_MARKER = "qdl-web: "
+
+
+def url_kind(url: str) -> str | None:
+    m = URL_KIND.search(url)
+    return m.group(1) if m else None
 
 
 class JobStatus(str, Enum):
@@ -75,6 +86,28 @@ class Job:
     # Datenbank von qobuz-dl ignorieren (--no-db): schon geladene Alben erneut holen
     redownload: bool = False
     summary: Summary = field(default_factory=Summary)
+    # album, playlist, track, artist, label (aus der URL, sobald bekannt)
+    kind: str | None = None
+    title: str | None = None
+
+    def __post_init__(self):
+        self.kind = self.kind or url_kind(self.url)
+
+    def take_name(self, line: str) -> bool:
+        """Namen aus einer Ausgabezeile übernehmen. True: Zeile nicht ins Log."""
+        if line.startswith(NAME_MARKER):
+            if self.title is None:  # bei Playlists gilt der Playlist-Name
+                try:
+                    info = json.loads(line[len(NAME_MARKER):])
+                except ValueError:
+                    return True
+                artist, title = info.get("artist") or "", info.get("title") or ""
+                self.title = f"{artist} – {title}" if artist and title else (title or artist or None)
+            return True
+        m = COLLECTION.search(line)
+        if m and self.title is None:
+            self.title, self.kind = m.group("name"), m.group("kind")
+        return False
     id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     status: JobStatus = JobStatus.queued
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
@@ -90,6 +123,8 @@ class Job:
             "quality": self.options.quality,
             "target_dir": self.options.target_dir,
             "redownload": self.redownload,
+            "kind": self.kind,
+            "title": self.title,
             "status": self.status.value,
             "summary": {
                 "new": self.summary.new,
@@ -210,7 +245,7 @@ class JobManager:
             assert proc.stdout is not None
             async for raw in read_lines(proc.stdout):
                 line = ANSI.sub("", raw).rstrip()
-                if line:
+                if line and not job.take_name(line):
                     job.log.append(line)
                     job.summary.feed(line)
             job.return_code = await proc.wait()

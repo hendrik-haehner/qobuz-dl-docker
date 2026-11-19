@@ -58,3 +58,17 @@ def test_install_twice_wraps_once(patched):
     attrs = Download._get_album_attr(META, "A/B", "FLAC", 16, 44.1)
     assert attrs["album"] == "A-B"
     assert not hasattr(Download.__dict__["_get_album_attr"].__func__.__wrapped__, "__wrapped__")
+
+
+def test_announces_full_name_for_download_list(patched, capsys):
+    import json
+
+    Download._get_album_attr(META, "Back/In Black", "FLAC", 24, 96)
+    Download._get_track_attr(META, "T.N.T.", 24, 96)
+    Download._get_filename_attr("AC/DC", TRACK, "Hells Bells")  # pro Titel: keine Meldung
+    lines = [l for l in capsys.readouterr().err.splitlines() if l.startswith(qdl_patches.MARKER)]
+    infos = [json.loads(l[len(qdl_patches.MARKER):]) for l in lines]
+    assert infos == [
+        {"artist": "AC/DC", "title": "Back/In Black"},  # ungekürzt, mit „/“
+        {"artist": "AC/DC", "title": "T.N.T."},
+    ]

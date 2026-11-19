@@ -137,3 +137,36 @@ def test_redownload_adds_no_db(tmp_path):
     assert job.to_dict()["redownload"] is True
     s = Settings(shares_dir=tmp_path / "dl", config_dir=tmp_path, qobuz_dl_bin="q", default_quality=6)
     assert "--no-db" not in build_command(s, Job(url=URL, options=Preferences(target_dir="music")))
+
+
+MARKER_ALBUM = 'qdl-web: {"artist": "AC/DC", "title": "Back in Black"}'
+PLAYLIST = "\x1b[33mDownloading all the music from Sommer 2026 (playlist)!"
+
+
+@pytest.mark.parametrize("url,kind", [
+    ("https://open.qobuz.com/album/abc", "album"),
+    ("https://play.qobuz.com/playlist/42", "playlist"),
+    ("https://open.qobuz.com/track/7", "track"),
+    ("https://www.qobuz.com/de-de/album/discovery-daft-punk/0724", "album"),
+    ("https://www.last.fm/user/x/playlists/1", None),
+])
+def test_kind_from_url(url, kind):
+    assert Job(url=url, options=Preferences()).kind == kind
+
+
+def test_album_name_from_marker(tmp_path):
+    job = _run(tmp_path, MARKER_ALBUM + "\n" + progress(1))
+    d = job.to_dict()
+    assert (d["title"], d["kind"]) == ("AC/DC – Back in Black", "album")
+    assert not any("qdl-web:" in line for line in job.log)  # Marker nicht im Protokoll
+
+
+def test_playlist_name_wins_over_albums(tmp_path):
+    out = PLAYLIST + "\n" + MARKER_ALBUM + "\n" + progress(1) + 'qdl-web: {"artist": "X", "title": "Y"}\n'
+    job = _run(tmp_path, out)
+    assert (job.title, job.kind) == ("Sommer 2026", "playlist")
+
+
+def test_broken_marker_is_ignored(tmp_path):
+    job = _run(tmp_path, "qdl-web: {kaputt\n" + progress(1))
+    assert job.title is None and job.status == JobStatus.done
