@@ -294,6 +294,9 @@ $("dl-form").addEventListener("submit", async (e) => {
 });
 
 // ---------- Jobliste ----------
+const KIND_LABEL = {
+  album: "Album", playlist: "Playlist", track: "Titel", artist: "Interpret", label: "Label",
+};
 const STATUS_LABEL = {
   queued: "wartet", running: "läuft", done: "fertig", skipped: "übersprungen", failed: "Fehler",
 };
@@ -326,12 +329,21 @@ function renderJob(job) {
   const badge = Object.assign(document.createElement("span"), {
     className: "badge", textContent: STATUS_LABEL[job.status] || job.status,
   });
-  const url = Object.assign(document.createElement("span"), { className: "url", textContent: job.url });
-  head.append(badge, url);
+  // Name statt Link, sobald qobuz-dl ihn kennt; ein Tippen öffnet Qobuz
+  const name = Object.assign(document.createElement("a"), {
+    className: job.title ? "job-title" : "url",
+    textContent: job.title || job.url,
+    href: job.url,
+    target: "_blank",
+    rel: "noopener",
+    title: job.url,
+  });
+  head.append(badge, name);
   const meta = document.createElement("div");
   meta.className = "muted small";
   const fmt = job.format === "mp3" ? "MP3 320" : `FLAC ${QUALITY_LABEL[job.quality]}`;
-  meta.textContent = `${fmt} → ${pretty(job.target_dir)}${job.redownload ? " · erneut" : ""}`;
+  const kind = KIND_LABEL[job.kind] ? `${KIND_LABEL[job.kind]} · ` : "";
+  meta.textContent = `${kind}${fmt} → ${pretty(job.target_dir)}${job.redownload ? " · erneut" : ""}`;
   const result = Object.assign(document.createElement("div"), { className: "small job-summary", textContent: summaryText(job) });
   result.hidden = !result.textContent;
   const details = document.createElement("details");

@@ -153,7 +153,10 @@ ul { list-style: none; padding: 0; }
   margin-bottom: 8px;
 }
 .job-head { display: flex; gap: 8px; align-items: baseline; }
-.url { overflow-wrap: anywhere; }
+.url { overflow-wrap: anywhere; color: var(--muted); }
+.job-head a { text-decoration: none; }
+.job-head a:hover { text-decoration: underline; }
+.job-title { color: var(--fg); font-weight: 600; overflow-wrap: anywhere; }
 .badge { font-size: 12px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--border); }
 .done .badge { color: var(--ok); border-color: var(--ok); }
 .failed .badge { color: var(--bad); border-color: var(--bad); }

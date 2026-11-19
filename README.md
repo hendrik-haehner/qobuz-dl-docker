@@ -257,7 +257,7 @@ Sitzung (sonst `401`).
 | `GET`/`PUT` | `/api/settings` | Standards: `format`, `quality`, `target_dir`, `folder_format`, `track_format` |
 | `GET` | `/api/folders?path=music/Rock` | Freigaben (ohne `path`) bzw. Unterordner |
 | `POST` | `/api/folders` | `{"parent": "music", "name": "Hi-Res"}` legt einen Ordner an |
-| `GET` | `/api/downloads`, `/api/downloads/{id}` | Jobs mit den letzten 200 Log-Zeilen |
+| `GET` | `/api/downloads`, `/api/downloads/{id}` | Jobs mit Art (`kind`: album, playlist, track, artist, label), Name (`title`, sobald qobuz-dl ihn meldet) und den letzten 200 Log-Zeilen |
 | `POST` | `/api/downloads` | `{"url": "..."}`, optional mit Feldern aus `/api/settings` und `"redownload": true` |
 
 Platzhalter für Ordner: `{artist} {album} {year} {bit_depth} {sampling_rate}`.
